@@ -154,7 +154,11 @@ external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `D
   (0% Received/Return-Path) — decision needed before Phase 3 (`Docs/decisions.md`)
 - [x] F116–F140 `nlp_text.py` (pyspellchecker 0.9.1, vaderSentiment 3.3.2, both MIT) — 6 tests;
   run on all 32,345 real emails: no crashes, ~10 ms each
-- [ ] `extractor.py` (140 values in catalogue order), feature-matrix builder in `ml/`
+- [x] `extractor.py` (140 values in catalogue order, `feature_code_hash`), email normaliser moved
+  into the backend (same function for training and API), matrix builder
+  `ml/phishguard_ml/features/matrix.py` + `features` command — counts unreadable pages in its
+  report. Parallel build checked on real emails (400 in 7 s). **Real run waits for:** RDAP end,
+  `label`, and your Defender decision (it reads all 51,592 phishing pages)
 - [ ] Missing-value rate per feature in the data card
 
 **Blocker (your decision):** Microsoft Defender flags stored phishing pages when they are read

@@ -9,6 +9,7 @@ split --n-url N --n-email M  step 8: makes the frozen split (once)
 verify-split                 fails if the frozen split changed
 collect [--once]             step 9: daily collector (the compose service runs this)
 datacard                     step 10: refresh the generated part of Docs/data_card.md
+features [--workers N]       Phase 2: F1-F140 for every record -> processed/features.parquet
 """
 
 import argparse
@@ -20,6 +21,7 @@ from phishguard_ml.data import collect, datacard, pipeline, rdap, split
 from phishguard_ml.data.download import download_source, make_client
 from phishguard_ml.data.records import Source, read_records, write_records
 from phishguard_ml.data.snapshot import NotInSnapshotContainerError, snapshot_records
+from phishguard_ml.features import matrix
 
 
 def _print(obj) -> None:
@@ -55,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("collect")
     p.add_argument("--once", action="store_true")
     sub.add_parser("datacard")
+    p = sub.add_parser("features")
+    p.add_argument("--workers", type=int, default=4)
     sub.add_parser("status")
     args = parser.parse_args(argv)
     try:
@@ -116,6 +120,11 @@ def _run(args) -> int:
         _print(pipeline.status())
     elif args.command == "datacard":
         print("updated", datacard.update())
+    elif args.command == "features":
+        path = pipeline.labelled_path()
+        records = read_records(path if path.exists() else pipeline.records_path())
+        report = matrix.build(records, workers=args.workers)
+        _print({k: v for k, v in report.items() if k != "missing_rate_in_own_modality"})
     return 0
 
 

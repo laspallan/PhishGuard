@@ -70,3 +70,27 @@ All settings come from environment variables with the `PHISHGUARD_` prefix; see
 `../.env.example`. No secrets are stored in code. `PHISHGUARD_ENCRYPTION_KEY` and
 `PHISHGUARD_EMAIL_HASH_KEY` are required to read or write email addresses; losing the
 encryption key makes stored emails unreadable, so keep a safe backup of it.
+
+## Features F1–F140 (Phase 2)
+
+`phishguard/services/features/` computes the 140 features of `Docs/features.md`, in that order.
+Training (`ml/`) and the live API call the same function:
+
+```python
+from phishguard.services.features.extractor import UrlEvidence, email_features, url_features
+url_features(UrlEvidence(url=..., captured_at=..., html=..., dns=..., tls=..., rdap=...), ranks)
+email_features(raw_email, ranks)    # ranks: Tranco registered domain -> rank
+```
+
+| Module | Features | Reads |
+|---|---|---|
+| `url_lexical.py` | F1–F45 | the URL string |
+| `domain_ssl.py` | F46–F65 | stored RDAP / DNS / TLS (F65 always missing) |
+| `html_js.py` | F66–F95 | stored page HTML (read as text, never run) |
+| `email_headers.py` | F96–F115 | the raw email |
+| `nlp_text.py` | F116–F140 | the time-normalised email (`email_normalise.py`) |
+
+Missing value = NaN (`missing.py`); URL records have F96–F140 missing, emails F1–F95. Word
+lists are in `lexicons.py`; external lists and their licences in `data/README.md`. Every
+definition choice is written at the top of its module. `extractor.feature_code_hash()` changes
+whenever any feature code or list changes; it is stored with the feature matrix.
