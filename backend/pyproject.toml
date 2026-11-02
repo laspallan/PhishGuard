@@ -7,13 +7,16 @@ name = "phishguard"
 version = "0.1.0"
 description = "PhishGuard backend: real-time phishing detection API (MVC)"
 requires-python = ">=3.11"
-# Phase 0 needs only the web layer. Later phases add their own dependencies
-# (SQLAlchemy/Alembic in Phase 5, ML libraries in Phase 3, and so on).
+# Each phase adds its own dependencies (ML libraries in Phase 3, and so on).
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    "cryptography>=43",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +32,9 @@ include = ["phishguard*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q"
+# Tests marked "postgres" need the docker compose Postgres; run them with `make test-db`.
+addopts = "-q -m 'not postgres'"
+markers = ["postgres: needs a running PostgreSQL (docker compose up postgres)"]
 
 [tool.ruff]
 line-length = 100
@@ -37,3 +42,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic writes long column definitions on one line.
+"phishguard/db/migrations/versions/*.py" = ["E501"]

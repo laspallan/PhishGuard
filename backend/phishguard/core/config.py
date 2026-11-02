@@ -6,6 +6,7 @@ A .env file is read from the repo root (../.env) or from backend/ (.env).
 
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,10 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str | None = None
     redis_url: str | None = None
+    # Fernet key that encrypts email addresses at rest.
+    encryption_key: SecretStr | None = None
+    # Separate secret for the email blind index (HMAC-SHA256), so lookups work on encrypted data.
+    email_hash_key: SecretStr | None = None
 
 
 @lru_cache

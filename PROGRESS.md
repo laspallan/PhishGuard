@@ -51,3 +51,38 @@ Status of each phase. A phase is marked Done only after every acceptance check i
 **Next phase needs to know:** decisions D1 (category labelling), D3 (URL/email split) and
 D4 (grouping key, the Enron problem) must be settled before Phase 1 starts. The `snapshot`
 collector service is added to `docker-compose.yml` in Phase 1.
+
+## Phase 1 — Data and split
+
+**Status:** Not started. Decisions D1 (category labelling), D3 (URL/email split) and D4
+(grouping key) were deferred on 2026-11-02 and must be settled before this phase starts.
+
+## Phase 5 — Backend API and database
+
+**Status:** In progress (database part built early, 2026-11-02)
+
+**What was built:**
+- `backend/phishguard/models/`: 13 tables in `access.py`, `detection.py`, `simulation.py`,
+  `experiments.py`; shared types and mixins in `base.py`; allowed values in `enums.py`.
+- `backend/phishguard/core/crypto.py`: Fernet encryption and HMAC blind index for emails.
+- `backend/phishguard/db/session.py` (engine, sessions, `get_db`), Alembic setup
+  (`alembic.ini`, `phishguard/db/migrations/`), initial migration `b56beefdb0fc`.
+- `Docs/database.md` (schema reference); new decisions in `Docs/decisions.md`.
+- `make migrate`, `make test-db`; two new keys in `.env.example`.
+
+**How to run:** `make migrate` (needs `docker compose up -d postgres`), `make test`,
+`make test-db`.
+
+**Test results (2026-11-02):**
+- `make test`: backend 25 passed (crypto 5, models 14, plus earlier tests), dashboard 8 passed.
+- `make test-db`: 1 passed — upgrade to head, models and database identical
+  (`compare_metadata` empty), downgrade removes every table.
+- `make lint`: clean. API container rebuilt; `/health` 200. Dev database at `b56beefdb0fc`.
+
+**Known issues:**
+- On this PC `localhost` tries IPv6 `::1` first and Docker does not answer it, so connections
+  hang. `.env.example` and `.env` now use `127.0.0.1`.
+- Cross-table rule "holdout template → usage sim_holdout" is left for the Phase 6 controller.
+
+**Still open in Phase 5:** endpoints, inference service, Celery worker, feature-parity test,
+latency measurement.

@@ -20,11 +20,11 @@ it stays **In progress**, with the unchecked items listed.
 | Phase | Status | Verified on | Notes |
 |---|---|---|---|
 | 0 Environment and skeleton | **Done** | 2026-11-02 | All acceptance checks verified (see PROGRESS.md). Carried forward: send the ethics-approval request (your action; needed before Phase 6) |
-| 1 Data and split | Not started | | |
+| 1 Data and split | Not started | | Blocked on decisions D1, D3, D4 (deferred by you on 2026-11-02) |
 | 2 Feature extractor | Not started | | |
 | 3 Models, ensembles, baseline | Not started | | |
 | 4 Threat intelligence, RQ2 | Not started | | |
-| 5 Backend API and DB | Not started | | |
+| 5 Backend API and DB | In progress | | DB schema, migration and model tests built early (2026-11-02, see `Docs/database.md`). Still open: endpoints, inference service, Celery worker, parity and latency checks |
 | 6 Simulation, feedback loop, RQ3 | Not started | | |
 | 7 Extension and gateway | Not started | | |
 | 8 Dashboard, final evaluation | Not started | | |

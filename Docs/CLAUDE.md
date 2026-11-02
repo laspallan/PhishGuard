@@ -23,6 +23,7 @@ Targets: accuracy > 95% and false positive rate < 5%. Report real numbers even i
 - Models: Random Forest, XGBoost, LightGBM on features; LSTM, 1D-CNN, DistilBERT on raw text. Ensembles: soft voting over calibrated probabilities, and a logistic-regression stacker on out-of-fold predictions.
 - Decision thresholds: block if score >= [0.90], warn if >= [0.60], otherwise allow. Tune on development data only.
 - Cascade: the fast tabular ensemble runs first; DistilBERT runs only when the score is uncertain (between [0.30] and [0.80]).
+- Database: every primary key is a UUID. Email addresses are always encrypted (Fernet) with an HMAC blind index for lookups. Email scans store only a hash, the sender domain and the verdict, never body or subject. The research dataset lives in /data/ files, not the database. Schema changes only through Alembic migrations.
 - Feedback loop: simulation-derived samples never enter the locked test set. A separate simulation-holdout set of unseen templates checks every retrained model. Promote a new model only if F1 improves and FPR does not rise on BOTH the locked test set and the simulation-holdout set.
 
 ## Stack
