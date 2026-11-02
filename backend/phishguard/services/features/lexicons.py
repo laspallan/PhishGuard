@@ -4,6 +4,8 @@ Kept in one place so the labelling rules (decision D1) and the features use the 
 Changing a list changes both the labels and the features: record it in Docs/decisions.md.
 """
 
+from importlib.resources import files
+
 # Brands commonly impersonated in phishing. Each maps to the registered domains it really owns,
 # so "brand named but domain is not the brand's" can be checked.
 BRAND_DOMAINS: dict[str, frozenset[str]] = {
@@ -81,3 +83,27 @@ SENSITIVE_URL_WORDS: tuple[str, ...] = (
     "password",
     "webscr",
 )
+
+# TLDs often abused for phishing (feature F26), lower case, without the dot. The 20 TLDs with the
+# highest Phishing Domain Score (phishing domains per 10,000 domains in the TLD; TLDs with at
+# least 30,000 domains and 25 phishing domains), Table 2 of Interisle Consulting Group,
+# "Phishing Activity in TLDs, May 2025 - April 2026",
+# https://www.cybercrimeinfocenter.org/phishing-activity-in-tlds-may-april-2026 (read 2026-11-02).
+# The score table is used, not the count table, which ranks big TLDs (com, net) first by size.
+SUSPICIOUS_TLDS: frozenset[str] = frozenset(
+    {
+        "xin", "win", "icu", "garden", "cfd", "pro", "help", "mom", "rest", "mobi",
+        "qpon", "live", "ink", "best", "lat", "cyou", "top", "wang", "life", "homes",
+    }
+)  # fmt: skip
+
+
+def _load_domain_list(name: str) -> frozenset[str]:
+    text = (files("phishguard.services.features") / "data" / name).read_text(encoding="utf-8")
+    lines = (line.strip().lower() for line in text.splitlines())
+    return frozenset(line for line in lines if line and not line.startswith("#"))
+
+
+# URL-shortening services, by domain (feature F27). Source, version and licence (CC BY-SA 4.0):
+# data/README.md.
+URL_SHORTENERS: frozenset[str] = _load_domain_list("url_shorteners.txt")

@@ -132,6 +132,27 @@ legitimate emails, so emails can reach about 18,858).
 **Approved choices:** Parquet; httpx, tldextract (offline PSL), dnspython, ssl, RDAP,
 StratifiedGroupKFold; `ml/` as its own package; collector as a compose service.
 
+## Phase 2 — Feature extractor F1–F140
+
+**Status:** In progress (started 2026-11-02, built alongside the end of Phase 1; uses no real
+split data, only hand-made test examples).
+**Decided 2026-11-02:** P2-a…P2-f (missing = NaN, modality columns, Tranco leakage reported,
+external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `Docs/decisions.md`.
+
+**Steps:**
+- [x] Shared pieces: `missing.py` (NaN), `hosts.py` (offline host splitting, same as ml/)
+- [x] F1–F45 `url_lexical.py`; lists for F26 (Interisle 2026 Table 2) and F27 (CC BY-SA
+  shortener list, pinned commit) — 16 tests, every value hand-counted
+- [ ] F46–F65 `domain_ssl.py` (stored RDAP / DNS / TLS; F65 needs an IP-to-ASN source)
+- [ ] F66–F95 `html_js.py`
+- [ ] F96–F115 `email_headers.py`
+- [ ] F116–F140 `nlp_text.py` (pyspellchecker, vaderSentiment after licence check)
+- [ ] `extractor.py` (140 values in catalogue order), feature-matrix builder in `ml/`
+- [ ] Missing-value rate per feature in the data card
+
+**Open for you:** URLhaus consent (see `Docs/decisions.md`, 2026-11-02 finding) — before
+Phase 3 (D2 baseline) and Phase 4.
+
 ## Phase 5 — Backend API and database
 
 **Status:** In progress (database part built early, 2026-11-02)

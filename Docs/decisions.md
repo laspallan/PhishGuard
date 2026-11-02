@@ -358,3 +358,60 @@ the brands are skewed toward Allegro. The data card reports categories as they c
 file as the phishing label we already use, not a rule of ours. **Not yet verified:** how
 PhishTank assigns `target` (submitter or verifier); check PhishTank's FAQ / developer pages
 before the viva and note the answer here.
+
+## 2026-11-02 — D2, D5, D7 decided; Phase 2 conventions (you accepted the recommendations)
+
+- **D2 (signature baseline):** URLs: lookup in blocklist snapshots taken before the sample's
+  collection date; emails: SpamAssassin rule score with Bayes off.
+- **D5:** separate URL and email models, the same six model types for each.
+- **D7:** `ti_score` only for a stratified subset that fits the free API limits (limits checked
+  in each provider's docs before coding); RQ2 on that subset; circularity discussed.
+- **DistilBERT training:** on Google Colab (rented GPU) — this PC has no NVIDIA GPU. The
+  notebook/script must read only the development split; the locked test set stays local.
+- **P2-a missing value = NaN.** One fixed missing value for "not applicable" and "could not be
+  measured". Viva: XGBoost and LightGBM learn a direction for NaN, so missingness is used
+  without inventing a number; a sentinel like −1 collides with real values (F133 ranges −1..1).
+- **P2-b modality:** URL records get F1–F95 (F96–F140 = NaN); emails get F96–F140
+  (F1–F95 = NaN). Pages linked from emails are never fetched (safety rule).
+- **P2-c Tranco leakage:** every legitimate URL comes from Tranco, so F57/F58 separate the
+  classes by construction. They stay (the list is fixed), and RQ1 is also reported without
+  F57/F58.
+- **P2-d lists** (suspicious TLDs, shorteners, ASNs, mailers) come from dated external
+  sources, never from our own data (that would leak the test set); each source is recorded.
+- **P2-e:** F46–F52 read the stored RDAP files; F96–F101 read only `Authentication-Results`
+  headers (no live DNS; old DKIM keys no longer exist). F55 may use RDAP name servers when the
+  host-level DNS query has no NS answer.
+- **P2-f:** `pyspellchecker` (F129) and `vaderSentiment` (F133) after checking version and
+  licence; Flesch reading ease (F130) computed with the published formula.
+
+## 2026-11-02 — Lists for F26 and F27 (sources checked)
+
+- **F26 suspicious_tld:** the 20 TLDs with the highest Phishing Domain Score in Table 2 of
+  Interisle Consulting Group, "Phishing Activity in TLDs, May 2025 – April 2026"
+  (https://www.cybercrimeinfocenter.org/phishing-activity-in-tlds-may-april-2026, read
+  2026-11-02; checked against the page text): xin, win, icu, garden, cfd, pro, help, mom, rest,
+  mobi, qpon, live, ink, best, lat, cyou, top, wang, life, homes. The page is "All Rights
+  Reserved"; only the TLD names (facts) are used, with citation.
+  **Viva:** "Why the score table, not the count table?" — the count table ranks com and net
+  first only because they are huge; the score (phishing domains per 10,000 registered) measures
+  how *often* a TLD is abused, which is what F26 says. **Threat to validity:** the report's
+  period (May 2025 – Apr 2026) overlaps our collection period; the list is still external (not
+  derived from our split), but a TLD heavily used in our phishing feeds will also rank there.
+- **F27 is_shortened:** PeterDaveHello/url-shorteners, file `list` at commit
+  `c0993928ba85b252a89640774e58467249d0ab74` (2026-09-06), 1,454 domains, CC BY-SA 4.0. Stored
+  unchanged in `backend/phishguard/services/features/data/url_shorteners.txt` (keeps its
+  licence; source, hash and licence in `data/README.md`). Matched on host or registered domain.
+- Spamhaus's TLD statistics page (spamhaus.org/statistics/tlds/) now returns 404, so it could
+  not be used.
+
+## 2026-11-02 — Finding: URLhaus terms forbid AI training without consent (affects D2, Phase 4)
+
+abuse.ch terms of use (https://abuse.ch/terms-of-use/, effective 4 Nov 2025, s.7.3): "Data or
+Confidential Information may not be used by users to customise, train, or otherwise improve any
+artificial intelligence model or product … without Spamhaus' express prior written consent."
+The URLhaus API and downloads also now need a free Auth-Key (https://auth.abuse.ch/).
+
+**Status:** URLhaus data is not used anywhere yet (the `urlhaus` input of `label` is empty).
+**Open for you:** either ask Spamhaus/abuse.ch for written consent, or use URLhaus only where no
+model learns from it (e.g. the D2 lookup baseline) and leave it out of `ti_score` and the
+malware labelling rule. Recorded so it is decided before Phase 3 (D2) and Phase 4.
