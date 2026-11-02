@@ -1,0 +1,5 @@
+# Keep LF line endings in the repo and in checkouts: scripts and Makefiles run inside Linux containers.
+* text=auto eol=lf
+*.docx binary
+*.png binary
+*.jpg binary

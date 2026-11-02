@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets (copy .env.example to .env)
+.env
+.env.local
+
+# Data and model artefacts: rebuilt by scripts, never committed
+/data/
+*.joblib
+*.pkl
+*.pt
+*.onnx
+*.safetensors
+
+# Node
+node_modules/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
