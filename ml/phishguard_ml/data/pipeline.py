@@ -11,6 +11,8 @@ import json
 from collections import Counter
 from dataclasses import asdict
 from datetime import UTC, datetime
+from pathlib import Path
+from urllib.parse import urlsplit
 
 from phishguard_ml import paths
 from phishguard_ml.data import clean, label, parse
@@ -118,3 +120,58 @@ def count(records: list[SampleRecord] | None = None) -> dict:
     paths.processed_dir().mkdir(parents=True, exist_ok=True)
     (paths.processed_dir() / "counts.json").write_text(json.dumps(summary, indent=2))
     return summary
+
+
+def status() -> dict:
+    """How far the snapshot and RDAP runs have got (read-only; safe while they run).
+
+    Fast on purpose: reads three columns, lists each folder once, and counts an RDAP file as
+    'to retry' from its small size only when it is one of the short error answers.
+    """
+    import os
+
+    import pyarrow.parquet as pq
+
+    from phishguard_ml.data import rdap
+    from phishguard_ml.data.clean import registered_domain
+
+    table = pq.read_table(
+        records_path(), columns=["sample_id", "sample_type", "label", "raw_content"]
+    )
+    snapshot_ids = (
+        set(os.listdir(paths.snapshots_dir())) if paths.snapshots_dir().exists() else set()
+    )
+    rdap_files = {}
+    if rdap.rdap_dir().exists():
+        with os.scandir(rdap.rdap_dir()) as entries:
+            rdap_files = {e.name[:-5]: e for e in entries if e.name.endswith(".json")}
+    snapshots: dict[str, list[int]] = {}
+    domains = set()
+    for sample_id, kind, label_value, content in zip(
+        *(table[c].to_pylist() for c in table.column_names), strict=True
+    ):
+        if kind != "url":
+            continue
+        counts = snapshots.setdefault(label_value, [0, 0])
+        counts[0] += sample_id in snapshot_ids
+        counts[1] += 1
+        domain = registered_domain(urlsplit(content).hostname or "")
+        if domain and not domain.replace(".", "").isdigit() and ":" not in domain:
+            domains.add(domain)
+    queried = [rdap_files[d] for d in domains if d in rdap_files]
+    retry = 0
+    for entry in queried:
+        if entry.stat().st_size < 200:  # short answers: 404s and errors; check which
+            if json.loads(Path(entry.path).read_text()).get("status") not in rdap.FINAL_STATUSES:
+                retry += 1
+    return {
+        "snapshots": {
+            k: f"{done:,} of {total:,}" for k, (done, total) in sorted(snapshots.items())
+        },
+        "rdap": {
+            "domains": len(domains),
+            "final_answer": len(queried) - retry,
+            "to_retry": retry,
+            "not_queried_yet": len(domains) - len(queried),
+        },
+    }

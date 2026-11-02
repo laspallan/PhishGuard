@@ -55,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("collect")
     p.add_argument("--once", action="store_true")
     sub.add_parser("datacard")
+    sub.add_parser("status")
     args = parser.parse_args(argv)
     try:
         return _run(args)
@@ -111,6 +112,8 @@ def _run(args) -> int:
                 _print(collect.collect_once(client))
         else:
             collect.run_forever()
+    elif args.command == "status":
+        _print(pipeline.status())
     elif args.command == "datacard":
         print("updated", datacard.update())
     return 0

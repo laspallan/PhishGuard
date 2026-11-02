@@ -145,3 +145,28 @@ def test_cli_count_prints_json(isolated_data_dir, capsys):
 
     assert cli.main(["count"]) == 0
     assert json.loads(capsys.readouterr().out)["total"] == 5
+
+
+def test_status_reports_snapshot_and_rdap_progress(isolated_data_dir):
+    seed_raw(isolated_data_dir)
+    pipeline.build()
+    records = read_records(pipeline.records_path())
+    first_url = next(
+        r for r in records if r.sample_type.value == "url" and r.label.value == "phishing"
+    )
+    folder = isolated_data_dir / "snapshots" / str(first_url.sample_id)
+    folder.mkdir(parents=True)
+    (folder / "meta.json").write_text("{}")
+    (isolated_data_dir / "rdap").mkdir()
+    (isolated_data_dir / "rdap" / "google.com.json").write_text('{"status": 200}')
+
+    report = pipeline.status()
+
+    assert report["snapshots"]["phishing"] == "1 of 3"
+    assert report["rdap"]["final_answer"] == 1
+    assert (
+        report["rdap"]["domains"]
+        == report["rdap"]["final_answer"]
+        + report["rdap"]["to_retry"]
+        + report["rdap"]["not_queried_yet"]
+    )
