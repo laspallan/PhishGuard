@@ -19,7 +19,7 @@ it stays **In progress**, with the unchecked items listed.
 
 | Phase | Status | Verified on | Notes |
 |---|---|---|---|
-| 0 Environment and skeleton | In progress | | All files built. Still to verify: `make test`/`make lint` (make not installed), `docker compose up` (Docker not installed), checks in your own environment, ethics request sent. See PROGRESS.md |
+| 0 Environment and skeleton | **Done** | 2026-11-02 | All acceptance checks verified (see PROGRESS.md). Carried forward: send the ethics-approval request (your action; needed before Phase 6) |
 | 1 Data and split | Not started | | |
 | 2 Feature extractor | Not started | | |
 | 3 Models, ensembles, baseline | Not started | | |
