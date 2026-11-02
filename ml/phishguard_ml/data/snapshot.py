@@ -267,8 +267,23 @@ def take_snapshot(
         found = same_site_links(html.decode("utf-8", errors="replace"), page_url, links)
         meta["same_site_links"] = found
     # meta.json is written last: its presence means the snapshot is complete (used to resume).
-    (folder / "meta.json").write_text(json.dumps(meta, indent=1))
+    _write_meta(folder, meta)
     return f"snapshots/{record.sample_id}", found
+
+
+def _write_meta(folder: Path, meta: dict) -> None:
+    """Atomic write: a run killed mid-write must not leave an empty meta.json marked complete."""
+    tmp = folder / "meta.json.tmp"
+    tmp.write_text(json.dumps(meta, indent=1))
+    os.replace(tmp, folder / "meta.json")
+
+
+def _read_meta(record: SampleRecord) -> dict | None:
+    """The finished snapshot's meta.json, or None if missing or unreadable (fetch again)."""
+    try:
+        return json.loads((paths.snapshots_dir() / str(record.sample_id) / "meta.json").read_text())
+    except (OSError, ValueError):
+        return None
 
 
 def _safe_snapshot(
@@ -281,7 +296,7 @@ def _safe_snapshot(
         folder = paths.snapshots_dir() / str(record.sample_id)
         folder.mkdir(parents=True, exist_ok=True)
         meta = {"url": record.raw_content, "error": f"crash: {type(error).__name__}: {error}"}
-        (folder / "meta.json").write_text(json.dumps(meta, indent=1))
+        _write_meta(folder, meta)
         return f"snapshots/{record.sample_id}", []
 
 
@@ -329,15 +344,14 @@ def snapshot_records(
     for r in records:
         if r.sample_type is not Modality.URL or (only is not None and r.label is not only):
             continue
-        meta_path = paths.snapshots_dir() / str(r.sample_id) / "meta.json"
-        if meta_path.exists():
+        meta = _read_meta(r)
+        if meta is not None:
             # Already snapshotted (e.g. before a rebuild): keep it, and re-create the D10a
             # link records it found, which a rebuild from the raw files does not contain.
             refs[r.sample_id] = f"snapshots/{r.sample_id}"
             if links and _is_home_page(r):
-                found = json.loads(meta_path.read_text()).get("same_site_links", [])
-                add_links(r, found[:links])
-        elif r.snapshot_ref is None:
+                add_links(r, meta.get("same_site_links", [])[:links])
+        else:
             todo.append(r)
     todo.sort(key=lambda r: r.label is not Label.PHISHING)  # phishing pages die fastest
     todo = todo[:limit]
@@ -350,11 +364,7 @@ def snapshot_records(
             for record, (ref, found) in zip(todo, results, strict=True):
                 refs[record.sample_id] = ref
                 add_links(record, found)
-            done = {
-                r.sample_id
-                for r in new_records
-                if (paths.snapshots_dir() / str(r.sample_id) / "meta.json").exists()
-            }
+            done = {r.sample_id for r in new_records if _read_meta(r) is not None}
             pending = [r for r in new_records if r.sample_id not in done]
             list(pool.map(lambda r: _safe_snapshot(r, client, cache, 0), pending))
             new_records = [

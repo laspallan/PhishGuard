@@ -309,3 +309,32 @@ At ~220 URLs per minute, snapshotting all 100,000 Tranco home pages plus their l
 legitimate URLs are needed to balance the phishing URLs, so the run is: (1) every phishing URL,
 (2) the top 30,000 Tranco home pages with one same-site page each (up to 60,000 legitimate URLs).
 More can be added later with `snapshot --only legitimate --limit N` (resumable).
+
+## 2026-11-02 — Finding: most live phishing pages show no credential form without JavaScript
+
+After snapshots, `label` gives URL categories: unknown 46,731, credential_harvest 2,965,
+brand_impersonation 1,878, malware 18 (of 51,592 phishing URLs). Of the 46,731 unknown, 23,708
+answered HTTP 2xx with HTML; the rest were offline (4xx 15,473, network error 6,263, 5xx 118)
+or not HTML (1,157). In the 23,708 live unknown pages (rough text checks, overlapping): only
+3% contain `<form`, 9% `<input`; 49% redirect by meta refresh or JavaScript, 40% are mostly
+`<script>`, 29% are under 2 KB, and 58% contain takedown / parking / bot-check words
+(suspended, not found, captcha, "just a moment", …).
+
+**Meaning:** the labeller is not missing forms; the forms are not in the HTML that may be
+fetched (no JavaScript, by the safety rule), or the page was already taken down. "unknown" is
+the honest label, and it stays.
+
+**Consequences, to decide later (not changed now):**
+- Per-category URL results will be based on ~4,900 labelled URLs; email categories are fine.
+- Many phishing snapshots are takedown or bot-check pages. Page-content features (Phase 2) on
+  those pages describe the takedown, not the attack; Phase 3 should also report URL results
+  without page-content features, and per snapshot status (live / offline).
+- Option for D1: use PhishTank's own `target` field to mark brand impersonation (source
+  metadata, not our guess). Not done without your decision.
+
+## 2026-11-02 — Snapshot metadata is written atomically
+
+One phishing snapshot had an empty `meta.json` (a run was stopped while writing it). Because
+the file existed, resume treated it as complete, so it was never fetched again. Now
+`meta.json` is written to a temporary file and renamed, and an unreadable `meta.json` counts as
+not done. The one affected URL was re-fetched (HTTP 200).

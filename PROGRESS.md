@@ -62,9 +62,9 @@ snapshots of the real URLs approved and **started 2026-11-02** (phishing first).
 
 **Remaining, in this order** (the snapshot run rewrites `records.parquet` when it ends, so
 `build` must not run while it is running):
-1. Snapshot runs finish (started 2026-11-02, ~220 URLs/min, restartable):
-   pass 1 `snapshot --only phishing` (~3.7 h), then pass 2
-   `snapshot --only legitimate --limit 30000 --links 1` (~4.5 h).
+1. ~~Snapshot runs~~ **done 2026-11-02** (both passes exit 0, 10:05): 101,313 URL records
+   have snapshots (all 51,592 phishing), and 16,213 same-site legitimate link pages (D10a)
+   were added.
 2. RDAP run finishes (`python -m phishguard_ml rdap`, registries only; re-run once to retry
    HTTP 429s). Missing data (no RDAP server / HTTP 403) is kept as missing — see decisions.
 3. ~~Enron download~~ **done 2026-11-02**: 443 MB (the page says "about 1.7Gb"; the file is complete: gzip check OK,
@@ -118,9 +118,14 @@ legitimate emails, so emails can reach about 18,858).
   redirect; `Invalid IPv6 URL` from a page link). Fixed: both are recorded per URL, and any
   unexpected error for one URL is written to its `meta.json` instead of stopping the run.
   Regression tests added; finished snapshots were kept (resume).
-- URL categories are mostly `unknown` (50,734 of 51,592) because the page-based rules need
-  snapshots; re-run `label` after snapshotting. The brand list has 35 brands; PhishTank's
-  `target` column names many more (e.g. Allegro) and could extend it.
+- After snapshots, URL categories are still mostly `unknown` (46,731 of 51,592): most live
+  phishing pages show no form without JavaScript, or were already taken down (see
+  `Docs/decisions.md`, 2026-11-02 finding). **Open for you:** use PhishTank's `target` field
+  for brand impersonation? The brand list has 35 brands.
+- One snapshot had an empty `meta.json` from a stopped run; writes are now atomic and the
+  URL was re-fetched (regression tests added).
+- Legitimate URLs with snapshots: 49,721 (incl. 16,213 link pages), slightly fewer than the
+  51,592 phishing URLs; `snapshot --only legitimate --limit 3000` would add ~3,000 more home pages (plus links) if needed.
 - 1 of 5 Tranco check sites timed out (facebook.com) from the container.
 - `data/snapshot_check/` (5 test snapshots) can be deleted by hand; my delete was blocked.
 

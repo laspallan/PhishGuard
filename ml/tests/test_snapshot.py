@@ -327,3 +327,29 @@ def test_one_crashing_url_does_not_stop_the_run(monkeypatch, isolated_data_dir):
         (isolated_data_dir / "snapshots" / str(boom.sample_id) / "meta.json").read_text()
     )
     assert meta["error"] == "crash: RuntimeError: unexpected"
+
+
+def test_empty_meta_from_a_killed_run_is_fetched_again(monkeypatch, isolated_data_dir):
+    monkeypatch.setenv(snapshot.CONTAINER_FLAG, "1")
+    calls: list[str] = []
+    monkeypatch.setattr(snapshot, "take_snapshot", fake_take(calls))
+    phish = SampleRecord.create(
+        source=Source.PHISHTANK, raw_content="http://half.example/", collected_at=T
+    )
+    folder = isolated_data_dir / "snapshots" / str(phish.sample_id)
+    folder.mkdir(parents=True)
+    (folder / "meta.json").write_text("")  # what a run killed mid-write left on disk (seen once)
+    already_ref = phish.model_copy(update={"snapshot_ref": f"snapshots/{phish.sample_id}"})
+
+    snapshot.snapshot_records([already_ref], workers=1)
+
+    assert calls == ["http://half.example/"]
+
+
+def test_meta_is_written_atomically(isolated_data_dir):
+    folder = isolated_data_dir / "snapshots" / "x"
+    folder.mkdir(parents=True)
+    snapshot._write_meta(folder, {"status": 200})
+
+    assert json.loads((folder / "meta.json").read_text()) == {"status": 200}
+    assert not (folder / "meta.json.tmp").exists()
