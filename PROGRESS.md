@@ -125,7 +125,8 @@ legitimate emails, so emails can reach about 18,858).
 - One snapshot had an empty `meta.json` from a stopped run; writes are now atomic and the
   URL was re-fetched (regression tests added).
 - Legitimate URLs with snapshots: 49,721 (incl. 16,213 link pages), slightly fewer than the
-  51,592 phishing URLs. **You decided:** add 3,000 more Tranco sites (plus links) — running.
+  51,592 phishing URLs. **You decided:** add 3,000 more Tranco sites — **done 2026-11-02**:
+  +3,000 home pages and 1,379 link pages; legitimate URLs with snapshots now 54,100.
 - 1 of 5 Tranco check sites timed out (facebook.com) from the container.
 - `data/snapshot_check/` (5 test snapshots) can be deleted by hand; my delete was blocked.
 
