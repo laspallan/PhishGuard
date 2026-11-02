@@ -33,3 +33,8 @@ def processed_dir() -> Path:
 def splits_dir() -> Path:
     """The frozen locked-test / development split and CV folds."""
     return data_dir() / "splits"
+
+
+def models_dir() -> Path:
+    """Trained models, out-of-fold predictions and their metadata (Phase 3)."""
+    return data_dir() / "models"

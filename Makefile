@@ -3,7 +3,7 @@
 
 install:
 	cd backend && python -m pip install -e ".[dev]"
-	cd ml && python -m pip install -e ".[dev]"
+	cd ml && python -m pip install -e ".[dev,train]"
 	cd frontend/dashboard && npm install
 
 test:

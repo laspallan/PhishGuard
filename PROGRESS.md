@@ -164,10 +164,30 @@ external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `D
 **Blocker (your decision):** Microsoft Defender flags stored phishing pages when they are read
 (first: `Trojan:HTML/Phish.HNAY!MTB` on one `page.html`, 2026-11-02 22:53). Building the feature
 matrix reads all 51,592 phishing pages, so Defender would block/quarantine many and silently
-shrink the dataset. Options in the chat; nothing was changed in Defender.
+shrink the dataset. **Decided 2026-11-03:** you add a Defender exclusion for
+`D:\PhishGuard\data` (admin, your action) and restore the quarantined page.
 
 **Decided 2026-11-02:** URLhaus only in the D2 blocklist baseline (removed from labelling and
 `ti_score`); F65 always missing.
+
+## Phase 3 — Models, ensembles, baseline and development evaluation
+
+**Status:** In progress (code first, on synthetic data; real training needs the split).
+**Decided 2026-11-03:** single-level Optuna on 5-fold CV, cross-fitted calibration/stacking,
+DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+(b).
+
+**Steps:**
+- [x] 1. `training/devdata.py` (development rows only, feature sets, stale-matrix guard),
+  `training/tabular.py` (RF / XGBoost / LightGBM, Optuna on OOF log loss, OOF saved with
+  metadata) — 9 tests, incl. the locked-test guard and a no-leak check on the folds
+- [ ] 2. Calibration (cross-fitted) and evaluation metrics (accuracy, precision, recall, F1,
+  FPR, bootstrap CIs, McNemar), thresholds 0.60 / 0.90 on OOF
+- [ ] 3. Ensembles: soft voting and logistic-regression stacker on OOF
+- [ ] 4. Text models: LSTM, 1D-CNN (PyTorch, CPU); DistilBERT script for Colab
+- [ ] 5. Cascade (tabular first, DistilBERT for scores in [0.30, 0.80]) and CPU latency
+- [ ] 6. Signature baseline (D2)
+- [ ] 7. SHAP summaries, model registry, results tables
+- [ ] 8. Real runs once the split exists
 
 ## Phase 5 — Backend API and database
 

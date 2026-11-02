@@ -471,3 +471,38 @@ header-feature models. Recommendation: (a) + (b).
   fixed, short, and published in `lexicons.py`; because they were never adjusted to the data,
   they cannot leak the test set, and their effect is measured like any other feature (SHAP).
 - Run on all 32,345 real emails (normalised view): no crashes, ~10 ms per email.
+
+## 2026-11-03 — Accepted: Defender exclusion, Enron headers, Phase 3 design, Phase 4 scope
+
+- **Defender:** option 1 — you add a Windows Security exclusion for `D:\PhishGuard\data` only
+  (needs administrator rights; your action). Reason: stored phishing pages are research data,
+  read as text and never opened in a browser; without the exclusion Defender blocks the most
+  typical phishing pages and biases the dataset. Restore the one quarantined page from
+  Protection history. To be stated in the thesis ethics / threats-to-validity section.
+- **Enron headers (a)+(b):** headline email results are reported **without** header features
+  F96–F115; header features are evaluated on SpamAssassin vs Nazario only; results are also
+  reported per legitimate source.
+- **Phase 3:** Optuna tuning on the 5-fold CV score (single level, not nested; the small
+  optimism is stated, the locked test set gives the unbiased estimate in Phase 8);
+  calibration and stacking cross-fitted on out-of-fold predictions; xgboost, lightgbm, optuna,
+  shap, torch (CPU) after version/licence checks; DistilBERT on Colab with the development
+  split only; a guard so no training code can load the locked test set.
+- **Phase 4:** URLs only. Subset size and the ti_score formula (fixed formula vs raw inputs)
+  are settled at the start of Phase 4 (no recommendation was given yet).
+
+## 2026-11-03 — Phase 3 step 1: development loader, feature sets, tabular models
+
+- Libraries (newest supporting Python 3.11 here, checked on PyPI 2026-11-03): xgboost 3.2.0
+  (Apache-2.0), lightgbm 4.7.0 (MIT), optuna 5.0.0 (MIT), shap 0.51.0 (MIT). Installed as the
+  `train` extra of `ml/`, so the snapshot/collector container stays small. Checked on the
+  installed versions: all three tree models accept NaN; `TPESampler(seed=...)` exists.
+- **Tuning objective = OOF log loss.** It scores the probabilities (needed for calibration,
+  ensembles and the 0.60 / 0.90 thresholds) without choosing a threshold first. Alternative:
+  F1 at 0.5 — not chosen, it ignores how confident the model is.
+- **url/no_path (D10c)** removes every F1–F45 feature that reads the path, query or fragment,
+  including whole-URL counts such as F1 url_length (they grow with the path); it keeps the 15
+  host-only features. A narrower set (path-only features) would still let URL length tell
+  home pages from deep links.
+- Guard: `devdata.load_development` is the only training/evaluation code that opens the split
+  and keeps development rows only; a test scans the package for any other access. A feature
+  matrix built by other feature code is refused (`feature_code_hash`).
