@@ -22,9 +22,9 @@ from collections import Counter
 from pathlib import PurePosixPath
 from urllib.parse import SplitResult, urlsplit
 
+from phishguard.services.features.brands import brand_named
 from phishguard.services.features.hosts import is_ip, split_host
 from phishguard.services.features.lexicons import (
-    BRAND_DOMAINS,
     RISKY_EXTENSIONS,
     SENSITIVE_URL_WORDS,
     SUSPICIOUS_TLDS,
@@ -82,8 +82,6 @@ FEATURE_NAMES: tuple[str, ...] = (
 
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 _TOKEN = re.compile(r"[^\W_]+")  # letters and digits (any script)
-_WORD = re.compile(r"[a-z0-9]+")
-_SEPARATORS = re.compile(r"[^a-z0-9]")
 _VOWELS = frozenset("aeiou")
 
 
@@ -133,13 +131,6 @@ def mixed_script(host: str) -> bool:
         if len(scripts) > 1:
             return True
     return False
-
-
-def brand_named(text: str) -> bool:
-    lowered = text.lower()
-    words = set(_WORD.findall(lowered))
-    compact = _SEPARATORS.sub("", lowered)
-    return any(brand in words or (len(brand) >= 5 and brand in compact) for brand in BRAND_DOMAINS)
 
 
 def _max_run(text: str) -> int:

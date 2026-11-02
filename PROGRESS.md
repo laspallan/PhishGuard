@@ -147,11 +147,17 @@ external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `D
 - [x] F46–F65 `domain_ssl.py` (stored RDAP / DNS / TLS; F65 always missing — you decided) —
   12 tests; ages measured at capture time, RDAP changes after capture = missing (leak guard);
   checked on 3,000 real snapshots: no crashes, plausible ranges
-- [ ] F66–F95 `html_js.py`
+- [x] F66–F95 `html_js.py` (standard-library parser, no new dependency) — 8 tests, one
+  hand-checked page covering every feature. Real-page check **stopped**: see Defender below
 - [ ] F96–F115 `email_headers.py`
 - [ ] F116–F140 `nlp_text.py` (pyspellchecker, vaderSentiment after licence check)
 - [ ] `extractor.py` (140 values in catalogue order), feature-matrix builder in `ml/`
 - [ ] Missing-value rate per feature in the data card
+
+**Blocker (your decision):** Microsoft Defender flags stored phishing pages when they are read
+(first: `Trojan:HTML/Phish.HNAY!MTB` on one `page.html`, 2026-11-02 22:53). Building the feature
+matrix reads all 51,592 phishing pages, so Defender would block/quarantine many and silently
+shrink the dataset. Options in the chat; nothing was changed in Defender.
 
 **Decided 2026-11-02:** URLhaus only in the D2 blocklist baseline (removed from labelling and
 `ti_score`); F65 always missing.
