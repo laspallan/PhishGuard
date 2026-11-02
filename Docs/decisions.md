@@ -338,3 +338,23 @@ One phishing snapshot had an empty `meta.json` (a run was stopped while writing 
 the file existed, resume treated it as complete, so it was never fetched again. Now
 `meta.json` is written to a temporary file and renamed, and an unreadable `meta.json` counts as
 not done. The one affected URL was re-fetched (HTTP 200).
+
+## 2026-11-02 — D1 extended: PhishTank's `target` field also marks brand impersonation (you decided)
+
+**Decision:** a phishing URL is `brand_impersonation` if our brand rule matches **or** PhishTank's
+`target` column names a brand (anything except "Other"). Malware still comes first. The field is
+read from the raw PhishTank files at labelling time (`parse.phishtank_targets`), so the record
+format does not change. HTML escapes in the file are decoded (`AT&amp;T` -> `AT&T`).
+
+**Why:** the page-based rules can label only ~4,900 URLs (see the finding above), and the
+`target` field is PhishTank's own verified annotation, not a guess of ours. In the file of
+2026-11-02, 5,138 of 51,463 rows name one of 93 brands (Allegro 1,899, IRS 790, Amazon 394, …);
+46,325 say "Other".
+
+**Limits (for the thesis):** only PhishTank URLs can get it (OpenPhish has no such field), and
+the brands are skewed toward Allegro. The data card reports categories as they come out.
+
+**Viva:** "Why trust PhishTank's target?" — It is the source's own annotation, taken from the same
+file as the phishing label we already use, not a rule of ours. **Not yet verified:** how
+PhishTank assigns `target` (submitter or verifier); check PhishTank's FAQ / developer pages
+before the viva and note the answer here.

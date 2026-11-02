@@ -94,3 +94,23 @@ def test_malformed_headers_do_not_crash_labelling():
         str(message.get("To"))
 
     assert label.label_email(message) is C.CREDENTIAL_HARVEST
+
+
+def test_phishtank_target_means_brand_impersonation_after_malware():
+    assert label.label_url("http://x.example/a", "<p>hi</p>", phishtank_target="Allegro") is (
+        C.BRAND_IMPERSONATION
+    )
+    assert label.label_url("http://x.example/a.apk", None, phishtank_target="Allegro") is (
+        C.MALWARE
+    )
+
+
+def test_label_record_looks_up_the_target_by_normalised_url():
+    record = SampleRecord.create(
+        source=Source.PHISHTANK, raw_content="HTTP://X.example/a", collected_at="2026-11-02T00:00Z"
+    )
+    targets = {clean.normalise_url("http://x.example/a"): "Allegro"}
+
+    assert label.label_record(record, None, phishtank_targets=targets).attack_category is (
+        C.BRAND_IMPERSONATION
+    )

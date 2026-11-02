@@ -114,3 +114,23 @@ def test_email_without_sender_is_its_own_group(tmp_path):
 
 def test_parsers_exist_for_every_source():
     assert set(parse.PARSERS) == set(Source)
+
+
+def test_phishtank_targets_unescaped_and_other_left_out(tmp_path):
+    day = "2026-11-01T10:00:00+00:00"
+    csv_bytes = phishtank_csv(
+        [
+            ("http://allegro.shop-x.example/", day, "yes"),
+            ("http://att-login.example/", day, "yes"),
+            ("http://plain.example/", day, "yes"),
+        ],
+        targets=["Allegro", "AT&amp;T", "Other"],  # as written in the real file
+    )
+    folder = write_download(tmp_path / "pt", {"online-valid.csv": csv_bytes}, "phishtank")
+
+    targets = parse.phishtank_targets([folder])
+
+    assert targets == {
+        "http://allegro.shop-x.example/": "Allegro",
+        "http://att-login.example/": "AT&T",
+    }

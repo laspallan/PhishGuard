@@ -34,14 +34,17 @@ def write_download(folder: Path, files: dict[str, bytes], source: str) -> Path:
     return folder
 
 
-def phishtank_csv(rows: list[tuple[str, str, str]]) -> bytes:
+def phishtank_csv(rows: list[tuple[str, str, str]], targets: list[str] | None = None) -> bytes:
     header = (
         "phish_id,url,phish_detail_url,submission_time,verified,verification_time,online,target"
     )
+    targets = targets or ["Other"] * len(rows)
     lines = [header] + [
         f"{i},{url},http://www.phishtank.com/phish_detail.php?phish_id={i},{submitted},"
-        f"{verified},{submitted},yes,Other"
-        for i, (url, submitted, verified) in enumerate(rows, start=1)
+        f"{verified},{submitted},yes,{target}"
+        for i, ((url, submitted, verified), target) in enumerate(
+            zip(rows, targets, strict=True), start=1
+        )
     ]
     return ("\n".join(lines) + "\n").encode()
 

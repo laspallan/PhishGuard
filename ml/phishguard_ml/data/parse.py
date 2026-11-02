@@ -6,6 +6,7 @@ used are counted in a RejectCounter instead of being silently dropped.
 
 import csv
 import hashlib
+import html
 import io
 import mailbox
 import tarfile
@@ -63,6 +64,25 @@ def parse_phishtank(folder: Path, rejects: RejectCounter) -> Iterator[SampleReco
             )
             if record:
                 yield record
+
+
+PHISHTANK_NO_TARGET = "Other"
+
+
+def phishtank_targets(folders: list[Path]) -> dict[str, str]:
+    """Normalised URL -> brand that PhishTank names in its `target` column (decision D1).
+
+    "Other" means PhishTank names no brand and is left out. Later folders win.
+    """
+    targets: dict[str, str] = {}
+    for folder in folders:
+        with (folder / "online-valid.csv").open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                target = html.unescape(row.get("target") or "").strip()
+                normalised = clean.normalise_url(row.get("url") or "")
+                if normalised and target and target != PHISHTANK_NO_TARGET:
+                    targets[normalised] = target
+    return targets
 
 
 def parse_openphish(folder: Path, rejects: RejectCounter) -> Iterator[SampleRecord]:
