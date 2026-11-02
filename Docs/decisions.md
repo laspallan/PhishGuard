@@ -437,3 +437,25 @@ snapshot; F51 is MISSING when "last changed" is after the capture. Thin registri
 Verisign) hold no registrant, so F50/F52 are MISSING there, not 0. Exact rules are in the
 `domain_ssl.py` docstring. **Viva:** a feature must be computable at the moment of detection;
 anything recorded later can only be used if it could not have been affected by the label.
+
+## 2026-11-02 — Email features: header features from the raw email, text features from the normalised one
+
+The plan says the time-clue normaliser runs "before feature extraction", but it replaces the
+X-Mailer and Date values, so F109/F110 could never be measured and "results without the
+age-sensitive features" would compare nothing. **Decision:** F96–F115 are computed from the raw
+email; F116–F140 and the text models use the normalised email; evaluation drops
+`email_headers.AGE_SENSITIVE` (F96–F101, F109, F110) for the age-gap result. F109 uses the three
+X-Mailer "known spam mailers" rules of Apache SpamAssassin 4.0.2 (`20_ratware.cf`, Apache 2.0);
+no published list names phishing kits, so F109 is almost always 0.
+
+## 2026-11-02 — Finding: Enron headers identify the corpus, not the class (decision needed before Phase 3)
+
+Header presence in the real data: Received 100% Nazario / 97% SpamAssassin / **0% Enron**;
+Return-Path 100% / 100% / **0%**; X-Mailer 44% / 38% / **0%**; Authentication-Results
+22% / 0% / 0%. The Enron release removed delivery headers, and its Message-IDs end in
+`@thyme`, so F103/F106/F107/F108 separate Enron from the rest by corpus format. Enron is 82% of
+the legitimate emails (18,808 of 22,916), so an email model with header features would learn
+"no Received headers = legitimate". Options (to decide before Phase 3):
+(a) headline email results without header features F96–F115; header features evaluated only on
+SpamAssassin vs Nazario; (b) also report per legitimate source; (c) drop Enron from
+header-feature models. Recommendation: (a) + (b).

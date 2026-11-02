@@ -4,6 +4,7 @@ Kept in one place so the labelling rules (decision D1) and the features use the 
 Changing a list changes both the labels and the features: record it in Docs/decisions.md.
 """
 
+import re
 from importlib.resources import files
 
 # Brands commonly impersonated in phishing. Each maps to the registered domains it really owns,
@@ -107,3 +108,14 @@ def _load_domain_list(name: str) -> frozenset[str]:
 # URL-shortening services, by domain (feature F27). Source, version and licence (CC BY-SA 4.0):
 # data/README.md.
 URL_SHORTENERS: frozenset[str] = _load_domain_list("url_shorteners.txt")
+
+# X-Mailer patterns of bulk-mail / spam tools (feature F109): the three X-Mailer "known spam
+# mailers" rules of Apache SpamAssassin 4.0.2, rules/20_ratware.cf (tag spamassassin_release_4_0_2,
+# commit 031cc0e790a8e013e5edc41dfa6f270a2148ae59, 2025-08-27; file SHA-256 e9fe7051...c311bf;
+# Apache License 2.0), regexes copied unchanged: RATWARE_EGROUPS, RATWARE_OE_MALFORMED,
+# RATWARE_MPOP_WEBMAIL. No published list names phishing kits, so F109 is rarely 1.
+SUSPICIOUS_MAILERS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"eGroups Message Poster"),
+    re.compile(r"^Microsoft Outlook Express \d(?:\.\d+){3} \w+$"),
+    re.compile(r"mPOP Web-Mail", re.IGNORECASE),
+)

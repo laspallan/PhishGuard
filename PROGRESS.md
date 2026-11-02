@@ -149,7 +149,9 @@ external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `D
   checked on 3,000 real snapshots: no crashes, plausible ranges
 - [x] F66–F95 `html_js.py` (standard-library parser, no new dependency) — 8 tests, one
   hand-checked page covering every feature. Real-page check **stopped**: see Defender below
-- [ ] F96–F115 `email_headers.py`
+- [x] F96–F115 `email_headers.py` + `email_parts.py` (robust header reading) — 13 tests; run
+  on all 32,345 real emails: no crashes. **Finding:** Enron headers identify the corpus
+  (0% Received/Return-Path) — decision needed before Phase 3 (`Docs/decisions.md`)
 - [ ] F116–F140 `nlp_text.py` (pyspellchecker, vaderSentiment after licence check)
 - [ ] `extractor.py` (140 values in catalogue order), feature-matrix builder in `ml/`
 - [ ] Missing-value rate per feature in the data card

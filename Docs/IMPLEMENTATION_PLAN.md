@@ -21,7 +21,7 @@ it stays **In progress**, with the unchecked items listed.
 |---|---|---|---|
 | 0 Environment and skeleton | **Done** | 2026-11-02 | All acceptance checks verified (see PROGRESS.md). Carried forward: send the ethics-approval request (your action; needed before Phase 6) |
 | 1 Data and split | In progress | | Code, Enron and snapshots done. Before Done: RDAP finish, label/count/datacard, real split, live collector. See PROGRESS.md |
-| 2 Feature extractor | In progress | | F1–F95 built and tested (2026-11-02); F96–F140, extractor, matrix to do |
+| 2 Feature extractor | In progress | | F1–F115 built and tested (2026-11-02); F116–F140, extractor, matrix to do |
 | 3 Models, ensembles, baseline | Not started | | |
 | 4 Threat intelligence, RQ2 | Not started | | |
 | 5 Backend API and DB | In progress | | DB schema, migration and model tests built early (2026-11-02, see `Docs/database.md`). Still open: endpoints, inference service, Celery worker, parity and latency checks |
