@@ -19,6 +19,7 @@ dependencies = [
     "cryptography>=43",
     "numpy>=1.26",
     "scikit-learn>=1.5",
+    "scipy>=1.11",  # McNemar (exact binomial test)
 ]
 
 [project.optional-dependencies]

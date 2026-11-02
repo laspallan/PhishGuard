@@ -506,3 +506,17 @@ header-feature models. Recommendation: (a) + (b).
 - Guard: `devdata.load_development` is the only training/evaluation code that opens the split
   and keeps development rows only; a test scans the package for any other access. A feature
   matrix built by other feature code is refused (`feature_code_hash`).
+
+## 2026-11-03 — Phase 3 steps 2–3: metrics, calibration, ensembles, cascade logic
+
+- **Confidence intervals by group bootstrap** (resample whole registered domains / senders,
+  D4). Viva: samples of one group are correlated; resampling single samples would give
+  intervals that are too narrow.
+- **McNemar:** exact two-sided binomial test on the discordant pairs (scipy `binomtest`).
+- **Calibration:** isotonic, cross-fitted by fold (a sample is never calibrated with its own
+  label; a test flips one fold's labels and checks that fold's output does not change).
+- **Stacker** on the raw OOF probabilities (log-odds), cross-fitted. Calibrated inputs would
+  leak: the other folds' calibrators were fitted with this fold's labels.
+- **Cascade:** inside [0.30, 0.80] (inclusive) the text model's probability replaces the
+  tabular one. **Thresholds** stay 0.60 / 0.90; `threshold_for_fpr` exists if you later want a
+  threshold chosen for a target false-positive rate on development OOF data.

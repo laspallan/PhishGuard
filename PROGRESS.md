@@ -180,9 +180,11 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
 - [x] 1. `training/devdata.py` (development rows only, feature sets, stale-matrix guard),
   `training/tabular.py` (RF / XGBoost / LightGBM, Optuna on OOF log loss, OOF saved with
   metadata) — 9 tests, incl. the locked-test guard and a no-leak check on the folds
-- [ ] 2. Calibration (cross-fitted) and evaluation metrics (accuracy, precision, recall, F1,
-  FPR, bootstrap CIs, McNemar), thresholds 0.60 / 0.90 on OOF
-- [ ] 3. Ensembles: soft voting and logistic-regression stacker on OOF
+- [x] 2. `training/calibration.py` (isotonic, cross-fitted), `evaluation/metrics.py`
+  (accuracy, precision, recall, F1, FPR, group-bootstrap CIs, exact McNemar, ECE,
+  threshold for a target FPR) — 7 tests, values by hand
+- [x] 3. `training/ensembles.py`: soft voting, cross-fitted LR stacker on raw OOF log-odds,
+  0.60 / 0.90 decisions, cascade rule — 5 tests
 - [ ] 4. Text models: LSTM, 1D-CNN (PyTorch, CPU); DistilBERT script for Colab
 - [ ] 5. Cascade (tabular first, DistilBERT for scores in [0.30, 0.80]) and CPU latency
 - [ ] 6. Signature baseline (D2)
