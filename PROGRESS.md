@@ -193,7 +193,11 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   the chat). torch was uninstalled again; nothing in ZKBioTime was changed.
 - [ ] 5. Cascade (tabular first, DistilBERT for scores in [0.30, 0.80]) and CPU latency
 - [ ] 6. Signature baseline (D2)
-- [ ] 7. SHAP summaries, model registry, results tables
+- [x] 7. `training/registry.py` (final model + calibrator on all development rows, version id,
+  hashes, `registry.json`), `evaluation/shap_report.py` (TreeExplainer, mean |SHAP|),
+  `evaluation/report.py` (CV table per modality / feature set, ensembles, CIs, ECE, FPR at
+  0.60 / 0.90, FPR per legitimate source, McNemar vs soft vote); `train` and `report`
+  commands — end-to-end test on synthetic data
 - [ ] 8. Real runs once the split exists
 
 ## Phase 5 — Backend API and database

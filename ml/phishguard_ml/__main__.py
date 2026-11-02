@@ -10,11 +10,16 @@ verify-split                 fails if the frozen split changed
 collect [--once]             step 9: daily collector (the compose service runs this)
 datacard                     step 10: refresh the generated part of Docs/data_card.md
 features [--workers N]       Phase 2: F1-F140 for every record -> processed/features.parquet
+train --modality M [--feature-set S] [--models ...] [--trials N]
+                             Phase 3: tune, OOF, final model, SHAP -> data/models/
+report                       Phase 3: development results table -> data/models/results.md
 """
 
 import argparse
 import json
 import sys
+
+import joblib
 
 from phishguard.models.enums import Label
 from phishguard_ml.data import collect, datacard, pipeline, rdap, split
@@ -26,6 +31,32 @@ from phishguard_ml.features import matrix
 
 def _print(obj) -> None:
     print(json.dumps(obj, indent=2, default=str))
+
+
+def _train(args) -> list[dict]:
+    from phishguard.models.enums import Modality
+    from phishguard_ml.evaluation.shap_report import mean_abs_shap
+    from phishguard_ml.training import devdata, registry, tabular
+
+    data = devdata.load_development(Modality(args.modality), args.feature_set)
+    manifest = split.verify_split()
+    done = []
+    for name in args.models or list(tabular.MODELS):
+        info = tabular.train_and_save(
+            name,
+            data,
+            modality=args.modality,
+            feature_set=args.feature_set,
+            n_trials=args.trials,
+            split_sha256=manifest["sha256"],
+            progress=lambda n, loss, name=name: print(f"{name} trial {n}: log loss {loss:.4f}"),
+        )
+        folder = tabular.run_dir(args.modality, args.feature_set, name)
+        entry = registry.fit_final(folder, data)
+        model = joblib.load(folder / "model.joblib")
+        (folder / "shap.json").write_text(json.dumps(mean_abs_shap(model, data), indent=1))
+        done.append({"model": name, "oof_log_loss": info.oof_log_loss, "version": entry["version"]})
+    return done
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,6 +90,13 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("datacard")
     p = sub.add_parser("features")
     p.add_argument("--workers", type=int, default=4)
+    p = sub.add_parser("train")
+    p.add_argument("--modality", choices=["url", "email"], required=True)
+    p.add_argument("--feature-set", default="all")
+    p.add_argument("--models", nargs="*", default=None)
+    p.add_argument("--trials", type=int, default=50)
+    p = sub.add_parser("report")
+    p.add_argument("--n-boot", type=int, default=1000)
     sub.add_parser("status")
     args = parser.parse_args(argv)
     try:
@@ -125,6 +163,13 @@ def _run(args) -> int:
         records = read_records(path if path.exists() else pipeline.records_path())
         report = matrix.build(records, workers=args.workers)
         _print({k: v for k, v in report.items() if k != "missing_rate_in_own_modality"})
+    elif args.command == "train":
+        _print(_train(args))
+    elif args.command == "report":
+        from phishguard_ml.evaluation import report as results
+
+        results.build(n_boot=args.n_boot)
+        print("written", results.results_path())
     return 0
 
 

@@ -141,6 +141,7 @@ def save_run(info: RunInfo, data: DevData, oof: np.ndarray) -> Path:
                 "fold": data.folds.astype("int8"),
                 "label": data.y.astype("int8"),
                 "source": data.sources,
+                "group": data.groups,
                 "p_phishing": oof,
             }
         ),

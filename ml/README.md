@@ -66,6 +66,21 @@ python -m phishguard_ml split --n-url N --n-email M   # frozen split, made ONCE
 python -m phishguard_ml verify-split             # fails if the split changed
 python -m phishguard_ml datacard                 # refresh Docs/data_card.md
 python -m phishguard_ml features                 # F1-F140 -> data/processed/features.parquet (Phase 2)
+```
+
+## Training and development results (Phase 3)
+
+Needs the `train` extra (`make install`). Uses the development split only.
+
+```powershell
+python -m phishguard_ml train --modality url --feature-set all --trials 50
+python -m phishguard_ml train --modality url --feature-set no_path      # D10c
+python -m phishguard_ml train --modality url --feature-set no_rdap      # F46-F52 left out
+python -m phishguard_ml train --modality url --feature-set no_tranco    # F57-F58 left out
+python -m phishguard_ml train --modality email --feature-set no_header  # headline email result
+python -m phishguard_ml train --modality email --feature-set all
+python -m phishguard_ml train --modality email --feature-set no_age
+python -m phishguard_ml report                   # -> data/models/results.md / results.json
 docker compose --profile collect up -d collector # daily fresh data for RQ3 (repo root)
 ```
 
