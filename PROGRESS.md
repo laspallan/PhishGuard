@@ -185,7 +185,12 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   threshold for a target FPR) — 7 tests, values by hand
 - [x] 3. `training/ensembles.py`: soft voting, cross-fitted LR stacker on raw OOF log-odds,
   0.60 / 0.90 decisions, cascade rule — 5 tests
-- [ ] 4. Text models: LSTM, 1D-CNN (PyTorch, CPU); DistilBERT script for Colab
+- [ ] 4. Text models: LSTM, 1D-CNN (PyTorch, CPU); DistilBERT script for Colab — **blocked:** PyTorch 2.14.1
+  fails to load (`WinError 1114`, `c10.dll`) because the venv's base Python is the copy bundled
+  with ZKBioTime (`C:\ZKBioTime\Python311`), which ships 2018 C++ runtime DLLs (msvcp140
+  14.16, ucrtbase 10.0.17134) that Windows loads before the current system ones (14.44).
+  Your action: install standard Python 3.11 from python.org and rebuild the venv (commands in
+  the chat). torch was uninstalled again; nothing in ZKBioTime was changed.
 - [ ] 5. Cascade (tabular first, DistilBERT for scores in [0.30, 0.80]) and CPU latency
 - [ ] 6. Signature baseline (D2)
 - [ ] 7. SHAP summaries, model registry, results tables
