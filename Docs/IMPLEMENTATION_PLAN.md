@@ -20,7 +20,7 @@ it stays **In progress**, with the unchecked items listed.
 | Phase | Status | Verified on | Notes |
 |---|---|---|---|
 | 0 Environment and skeleton | **Done** | 2026-11-02 | All acceptance checks verified (see PROGRESS.md). Carried forward: send the ethics-approval request (your action; needed before Phase 6) |
-| 1 Data and split | In progress | | D1, D3, D4 decided; D9 (2021–2026 URL history) open. Steps 1–10 in PROGRESS.md |
+| 1 Data and split | In progress | | All 10 steps' code built and tested. Before Done: D3 (sizes), D9, D10, Enron download, snapshots of real URLs, real split, live collector. See PROGRESS.md |
 | 2 Feature extractor | Not started | | |
 | 3 Models, ensembles, baseline | Not started | | |
 | 4 Threat intelligence, RQ2 | Not started | | |
@@ -59,13 +59,14 @@ Targets: accuracy > 95%, FPR < 5%. Real numbers are reported even if targets are
 | D0 | Repository layout. | Phase 0 | **Decided 2026-11-01:** top-level `backend/` (MVC API), `ml/`, `gateway/`, `frontend/` (`dashboard/`, `extension/`), `Docs/`; `docker-compose.yml` at the repo root. See `Docs/decisions.md`. |
 | D1 | Attack-category labelling rules. | Phase 1 | **Decided 2026-11-02:** ordered rules (malware → brand_impersonation → credential_harvest → spear → unknown), documented in `data_card.md`. See `Docs/decisions.md`. |
 | D2 | What the RQ1 "signature-based baseline" is. Not defined in the proposal. | Phase 3 | URLs: lookup against a blocklist snapshot (PhishTank/OpenPhish/URLhaus) taken *before* the sample's collection date. Emails: SpamAssassin rule score (rules only, Bayes off). |
-| D3 | How the 175,000 samples split between URLs and emails. | Phase 1 | **Decided 2026-11-02:** count what survives cleaning first, then fix the split (URL-heavy expected), each modality 50/50. See `Docs/decisions.md`. |
+| D3 | How the 175,000 samples split between URLs and emails. | Phase 1 | **Decided 2026-11-02:** largest balanced set available at split time (≈120k expected; 175k not reachable with the public email corpora), each modality 50/50. See `Docs/decisions.md`. |
 | D4 | Grouping key for the split. | Phase 1 | **Decided 2026-11-02:** URLs by registered domain (eTLD+1); emails by sender address (Enron: mailbox owner). See `Docs/decisions.md`. |
 | D5 | One set of six models for both modalities, or separate URL and email models. | Phase 3 | Separate per modality (the features and the text inputs are different), still six model *types*. |
 | D6 | Visual-similarity check in the extension (promised in Gap 3 / Table 2.3, but no feature or model covers it). | Phase 7 | Perceptual-hash comparison of a page screenshot / favicon against a small set of fictional and protected brand references, used as a warning signal, outside the 140 features. Or drop it and state it as a limitation. |
 | D7 | How `ti_score` is obtained for the training data. Free VirusTotal limits make 175k lookups impossible, and URLs taken *from* PhishTank are likely to be in TI feeds already (circular). | Phase 4 | Record TI responses at collection time only; compute `ti_score` for a stratified subset that fits the API limits; run RQ2 on that subset; discuss the circularity as a threat to validity. Check current API limits in each provider's docs. |
 | D8 | Start date, so the 24-week timeline has real dates. | Phase 0 | Fill in Section 5. |
-| D9 | **OPEN (deferred 2026-11-02).** The proposal says phishing URLs cover 2021–2026, but the free PhishTank/OpenPhish feeds probably list only URLs online *now* (to verify on their pages). Option (a): keep the sources and reword to "collected from <start date> onward"; (b): add an archived phishing-URL dataset (changes the fixed source list). | Before step 7 of Phase 1 (counting) | (a), and start the daily collector as early as possible. |
+| D9 | **Decided 2026-11-02: option (a).** The proposal says phishing URLs cover 2021–2026, but the free feeds list only URLs online *now* — **confirmed 2026-11-02**: PhishTank's developer page says its files contain "only online phishes"; OpenPhish's free feed has no archive (its 30-day archive needs the Academic Use Program). Option (a): keep the sources and reword to "collected from <start date> onward"; (b): add an archived phishing-URL dataset (changes the fixed source list). | Before step 8 of Phase 1 (split) | (a). Finding 2026-11-02: PhishTank submission dates already span 2021–2026 (see `Docs/decisions.md`). |
+| D10 | **Decided 2026-11-02: (a) + (c).** Legitimate URLs from Tranco are home pages only; phishing URLs have paths, so URL shape alone separates the classes. | Before step 8 of Phase 1 (split) | (a) add same-site links from Tranco pages during snapshotting, plus (c) report URL results with and without path features. See `Docs/decisions.md`. |
 
 ---
 
@@ -196,7 +197,7 @@ Targets: accuracy > 95%, FPR < 5%. Real numbers are reported even if targets are
 - Cascade: tabular ensemble first; DistilBERT only if score is in [0.30, 0.80].
 - Thresholds: block ≥ 0.90, warn ≥ 0.60, tuned on development OOF data only.
 - Signature baseline (D2).
-- Evaluation module: accuracy, precision, recall, F1, FPR; per modality; with and without F96–F101/F109/F110 for email; FPR on the recent legitimate-email check set; bootstrap 95% CIs; McNemar test; SHAP summaries for tabular models.
+- Evaluation module: accuracy, precision, recall, F1, FPR; per modality; with and without F96–F101/F109/F110 for email; URL results also without the URL-path features (decision D10c); URL results also without the RDAP features F46–F52 (missing registration data differs by class); FPR on the recent legitimate-email check set; bootstrap 95% CIs; McNemar test; SHAP summaries for tabular models.
 - Model registry: versioned artefacts with metadata (data hash, features hash, seed, metrics).
 
 **Acceptance checks:**

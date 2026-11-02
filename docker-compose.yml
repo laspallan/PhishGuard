@@ -1,5 +1,5 @@
 # PhishGuard services. Copy .env.example to .env first.
-# Later phases add: snapshot (Phase 1), worker (Phase 5), dashboard (Phase 8).
+# Later phases add: worker (Phase 5), dashboard (Phase 8).
 services:
   postgres:
     image: postgres:16
@@ -40,6 +40,34 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # --- Data collection (Phase 1). Started only with `--profile collect`. ---
+  # The only containers allowed to fetch phishing pages. They get no database or encryption
+  # secrets, run as a non-root user with no Linux capabilities, and write only to ./data.
+  snapshot:
+    profiles: ["collect"]
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+    command: ["snapshot"]
+    environment: &collector-env
+      PHISHGUARD_PHISHTANK_APP_KEY: ${PHISHGUARD_PHISHTANK_APP_KEY:-}
+      PHISHGUARD_PHISHTANK_USERNAME: ${PHISHGUARD_PHISHTANK_USERNAME:-}
+    volumes: ["./data:/data"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  collector:
+    profiles: ["collect"]
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+    command: ["collect"]
+    environment: *collector-env
+    volumes: ["./data:/data"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
 
 volumes:
   pgdata:

@@ -49,3 +49,28 @@ make install      # installs backend and ml
 make test
 make lint
 ```
+
+## Building the dataset (Phase 1)
+
+Run from `ml/` with the venv active. Each step reads the previous step's output under `data/`.
+
+```powershell
+python -m phishguard_ml download                 # all sources -> data/raw/<source>/<day>/
+python -m phishguard_ml build                    # -> data/processed/records.parquet
+# Snapshots: ONLY in the container (phishing pages are never fetched from your PC)
+docker compose --profile collect run --rm snapshot          # from the repo root
+python -m phishguard_ml rdap                     # domain registration data (registries only)
+python -m phishguard_ml label                    # -> data/processed/labelled.parquet
+python -m phishguard_ml count                    # look at the numbers, then choose sizes (D3)
+python -m phishguard_ml split --n-url N --n-email M   # frozen split, made ONCE
+python -m phishguard_ml verify-split             # fails if the split changed
+python -m phishguard_ml datacard                 # refresh Docs/data_card.md
+docker compose --profile collect up -d collector # daily fresh data for RQ3 (repo root)
+```
+
+`python -m phishguard_ml snapshot` on your PC is refused on purpose; only `ml/Dockerfile` sets
+the flag that allows it.
+
+Own-mailbox check set: put exported `.eml` files (personal content removed) in
+`data/raw/own_mailbox/`; `build` writes them to `data/processed/own_mailbox.parquet`, which is
+never part of the dataset or the split.

@@ -1,0 +1,12 @@
+# Build context for ml/Dockerfile is the repo root: never send data or local environments.
+data/
+.git/
+**/.venv/
+**/node_modules/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/*.egg-info/
+frontend/
+Docs/
+.env

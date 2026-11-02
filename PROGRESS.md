@@ -54,22 +54,75 @@ collector service is added to `docker-compose.yml` in Phase 1.
 
 ## Phase 1 — Data and split
 
-**Status:** In progress. D1, D3, D4 decided 2026-11-02. **D9 open:** the free phishing feeds
-probably list only URLs online now, not 2021–2026 history (option a: reword the proposal;
-option b: add an archived dataset). Needed before step 7.
+**Status:** In progress — all code built and tested (2026-11-02); the real split is not made yet.
+**Decided 2026-11-02 (you accepted the recommendations):** D3 = largest balanced set at split
+time (≈120k, report the gap to 175k); D9 = option (a); D10 = (a) one same-site page per Tranco
+home page, built into the snapshot collector, + (c) path-free URL results in Phase 3;
+snapshots of the real URLs approved and **started 2026-11-02** (phishing first).
+
+**Remaining, in this order** (the snapshot run rewrites `records.parquet` when it ends, so
+`build` must not run while it is running):
+1. Snapshot runs finish (started 2026-11-02, ~220 URLs/min, restartable):
+   pass 1 `snapshot --only phishing` (~3.7 h), then pass 2
+   `snapshot --only legitimate --limit 30000 --links 1` (~4.5 h).
+2. RDAP run finishes (`python -m phishguard_ml rdap`, registries only; re-run once to retry
+   HTTP 429s). Missing data (no RDAP server / HTTP 403) is kept as missing — see decisions.
+3. ~~Enron download~~ **done 2026-11-02**: 443 MB (the page says "about 1.7Gb"; the file is complete: gzip check OK,
+   520,743 files from 150 mailboxes, as the page describes); 10% received-mail sample = 20,346 emails. `build` re-run with
+   Enron: 183,931 records after de-duplication.
+4. `build` (now with Enron) → both snapshot passes again (fetch nothing old, restore the D10
+   pages) → `label` → `count` → `datacard`.
+5. `split --n-url <2 × phishing URLs> --n-email <2 × phishing emails>` (D3) → `verify-split`.
+6. Start the daily collector: `docker compose --profile collect up -d collector`.
+7. Re-check every acceptance check below on the real data, then mark Phase 1 Done.
 
 **Steps:**
-- [x] 1. `ml/` package (`phishguard_ml`), paths, `SampleRecord` format, Parquet read/write
-  — 15 tests pass, ruff clean (2026-11-02)
-- [ ] 2. Downloaders with manifests (verify each source's format first)
-- [ ] 3. Cleaning: URL normalisation, email parsing, de-duplication
-- [ ] 4. Email time-clue normaliser (§3.6.1)
-- [ ] 5. Snapshot collector container (GET only; HTML, DNS, TLS, RDAP)
-- [ ] 6. Category labeller (D1)
-- [ ] 7. Count cleaned sources → you fix the URL/email mix (D3); D9 must be settled
-- [ ] 8. Sampling, grouped split (D4), 5 CV folds, split hash test
-- [ ] 9. Daily/monthly collector (compose service) and own-mailbox check set loader
-- [ ] 10. `data_card.md` from script output; Phase 1 verification
+- [x] 1. `ml/` package, paths, `SampleRecord` (UUID v5 ids), Parquet read/write
+- [x] 2. Downloaders + manifests (`download.py`); formats verified on the source pages and on
+  the real files. Downloaded 2026-11-02: PhishTank, OpenPhish, Tranco (list V354N), Nazario,
+  SpamAssassin, Enron (443 MB, complete).
+- [x] 3. Parsing (`parse.py`) and cleaning (`clean.py`): URL normalisation, registered domain,
+  email parsing, D4 group keys, de-duplication (phishing copy wins a label conflict)
+- [x] 4. Email time-clue normaliser (`email_normalise.py`)
+- [x] 5. Snapshot collector (`snapshot.py`, `ml/Dockerfile`, compose `snapshot` service).
+  Checked in the container on 5 legitimate Tranco sites: 3 full snapshots, 1 does not resolve,
+  1 connect timeout — all recorded. **Not yet run on phishing URLs** (your go needed).
+- [x] 6. Category labeller (`label.py`, D1), shared word lists in
+  `backend/phishguard/services/features/lexicons.py`
+- [x] 7. Counting (`pipeline.count`): see the data card. **Stop: you choose n_url / n_email.**
+- [x] 8. Sampling, grouped split, 5 folds, hashes, never-overwrite (`split.py`) — tested on
+  synthetic data; **real split not made** (waits for D3, D9, D10, Enron, snapshots)
+- [x] 9. Daily collector (`collect.py`, compose `collector` service), own-mailbox loader
+- [x] 10. `Docs/data_card.md` generated from pipeline outputs (`datacard.py`)
+
+**Real numbers (build 2026-11-02, without Enron):** 165,123 records after de-duplication —
+URLs 51,592 phishing / 99,994 legitimate; emails 9,429 phishing / 4,108 legitimate. Largest
+balanced set today: 103,184 URLs + 8,216 emails = 111,400 (< 175,000; Enron will add
+legitimate emails, so emails can reach about 18,858).
+
+**Acceptance checks:**
+- [ ] Final counts match 175,000 and 50/50, per-category counts in the data card — *not yet*:
+  only 111,400 balanced samples are possible today (see D3 below); categories are in the card
+- [x] No group_key on both sides of the split; no content_hash twice — `test_split.py`,
+  `test_clean.py` (synthetic data; to re-check on the real split)
+- [x] Test ≈ 15%, folds stratified, reproducible from seed 42 — `test_split.py`
+- [ ] Monthly collector runs as a scheduled job and writes a dated batch — code and test pass
+  (`test_pipeline.py`); **not yet started live** in the container
+- [x] Tests run offline against small fixture files — 101 ml tests, network mocked
+
+**Test results (2026-11-02):** `make test` backend 25, ml 101, dashboard 8 passed;
+`make test-db` 1 passed; `make lint` clean; `docker compose config` valid.
+
+**Known issues:**
+- The first two snapshot passes stopped on single malformed URLs (`httpx.InvalidURL` from a
+  redirect; `Invalid IPv6 URL` from a page link). Fixed: both are recorded per URL, and any
+  unexpected error for one URL is written to its `meta.json` instead of stopping the run.
+  Regression tests added; finished snapshots were kept (resume).
+- URL categories are mostly `unknown` (50,734 of 51,592) because the page-based rules need
+  snapshots; re-run `label` after snapshotting. The brand list has 35 brands; PhishTank's
+  `target` column names many more (e.g. Allegro) and could extend it.
+- 1 of 5 Tranco check sites timed out (facebook.com) from the container.
+- `data/snapshot_check/` (5 test snapshots) can be deleted by hand; my delete was blocked.
 
 **Approved choices:** Parquet; httpx, tldextract (offline PSL), dnspython, ssl, RDAP,
 StratifiedGroupKFold; `ml/` as its own package; collector as a compose service.

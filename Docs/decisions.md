@@ -200,3 +200,112 @@ with that name could be installed (a supply-chain risk).
 
 **Alternative:** putting the pipeline inside the backend package. Not chosen for the image
 size reason above (see D0).
+
+## 2026-11-02 — Phase 1 data choices (made while building; open to change)
+
+**Tranco: top 100,000 domains, as `https://<domain>/`.** These are sites people actually visit;
+the long tail of the top 1M contains many parked or infrastructure-only domains (e.g. a top-5
+domain in our check, `ezviz7.com`, does not even resolve). The limit is a setting
+(`build --tranco-limit`), recorded in build_report.json.
+
+**Enron: received mail only, deterministic 10% sample, grouped by mailbox owner.** Folders whose
+name contains `sent`, `all_documents` or `discussion_threads` are skipped: sent mail is written
+by the owner (phishing is received mail) and the other two are copies of other folders. A
+message is kept if the SHA-256 of its path falls in the lowest 10%, so the sample is identical
+on every rebuild without needing a random seed. Setting: `build --enron-fraction`.
+
+**SpamAssassin: only the three 2003-02-28 ham archives.** The 2002-10-10 archives are earlier
+copies of the same messages and the spam archives are spam, not phishing. Note: the messages in
+these archives are dated 2002 (the proposal says 2002–2005).
+
+**Snapshot safety beyond CLAUDE.md.** Each redirect hop is checked separately; hosts resolving to
+private, loopback, link-local or reserved addresses are never contacted (stops a phishing URL
+from reaching the home network or the cloud metadata address); bodies that are not HTML are
+never read; pages are capped at 2 MB; no cookies are kept. Snapshot code refuses to run unless
+`PHISHGUARD_IN_SNAPSHOT_CONTAINER=1`, which only `ml/Dockerfile` sets. The container gets no
+database or encryption secrets, drops all Linux capabilities and runs as a non-root user.
+
+**Malformed emails never stop the pipeline.** Python's email parser raises on some real headers
+(e.g. `To: unlisted-recipients:; (no To-header on input)` in Nazario); all header reads go
+through `clean.header()`, which returns "" instead.
+
+## 2026-11-02 — D9 finding: PhishTank dates
+
+PhishTank's file lists only phishes still online, but their `submission_time` spans 2011–2026:
+2021: 156, 2022: 915, 2023: 6,724, 2024: 16,169, 2025: 7,657, 2026: 19,618 (data card). So the
+proposal's "2021–2026" is true by submission date, though 2021–2022 are thin. Decision D9 stays
+open for you; this finding supports option (a).
+
+## 2026-11-02 — D10 (OPEN): legitimate URLs are home pages only
+
+Tranco gives domains, so every legitimate URL is `https://<domain>/`, while phishing URLs have
+paths, queries and subdomains. A model could reach high accuracy from URL length alone, which
+would inflate RQ1. Options: (a) during snapshotting, also take a few same-site links from each
+Tranco home page as extra legitimate URLs (deeper pages of real sites); (b) keep home pages and
+report it as a limitation; (c) report URL results with and without the lexical path features.
+Recommendation: (a), plus (c) as a robustness check. Needs your decision before the split.
+
+## 2026-11-02 — Decided by you: D3 size, D9, D10, snapshot go-ahead ("accept recommendations")
+
+**D3 — dataset size.** The split uses the **largest balanced set available when it is made**,
+each modality 50% phishing / 50% legitimate: every phishing email that survives cleaning
+(about 9,400, matched by as many legitimate emails once Enron is in) and up to all phishing URLs
+(about 51,600 matched by as many legitimate URLs). Expected total ≈ 120,000, below the
+proposal's 175,000; the shortfall and its reason (the public phishing-email corpus is small) are
+reported in the thesis. The split is made only after Enron, the snapshots and the D10 links are
+done, so it is made once with complete data.
+*Viva:* "I kept the 50/50 balance and the stratification, and used every usable sample rather
+than duplicating phishing emails to reach 175,000; oversampling would have put copies of the same
+email on both sides of the split."
+
+**D9 — option (a).** The sources stay as fixed. The thesis describes the phishing URLs as
+"PhishTank's verified online list downloaded on 2026-11-02 (submission dates 2021–2026) plus
+OpenPhish, then collected daily". No archived dataset is added.
+
+**D10 — options (a) and (c).** (a) While snapshotting, each Tranco home page contributes one
+same-site deeper page (chosen deterministically from its links) as an extra legitimate URL, so
+legitimate URLs also have paths. (c) In Phase 3, URL results are also reported without the
+URL-path features, as a robustness check.
+
+**Snapshots of the real URLs: approved.** Run in the snapshot container, phishing URLs first
+(they go offline fastest), then the legitimate ones. A run can be stopped and restarted: URLs that
+already have a snapshot folder are not fetched again.
+
+## 2026-11-02 — RDAP collected separately, directly from the registries
+
+**Decision:** registration data is no longer part of the page snapshot. A separate step
+(`python -m phishguard_ml rdap`) queries each registered domain once, directly at its registry's
+RDAP server from IANA's bootstrap file (RFC 9224), one request at a time per registry with a 0.5 s
+pause, retrying HTTP 429/5xx with increasing waits. Results: `data/rdap/<domain>.json`.
+
+**Why:** in the first real run, rdap.org answered most requests with HTTP 429 (too many
+requests), and doing RDAP inside the snapshot slowed page capture to ~60 URLs a minute. Pages go
+offline within hours; registration records do not, so they can be fetched more slowly. Going to
+each registry spreads the load instead of sending everything through one redirector.
+
+**Alternative:** keep using rdap.org with a global rate limit. Not chosen: one shared limit for
+~100,000 domains would take days, and rdap.org is a volunteer service.
+
+Note: the first 801 snapshot folders contain an old `rdap.json` (mostly HTTP 429); it is ignored —
+feature extraction reads `data/rdap/`.
+
+## 2026-11-02 — Missing registration data is reported, not worked around
+
+First RDAP run: 5,144 answers, 23,907 with no RDAP data (23,806 because IANA's bootstrap file
+lists no RDAP server for the TLD: mostly .ru, .de, .jp, .io, .cn, .it, .co, .edu), 948 refused
+with HTTP 403 (mostly .xyz, .sbs, .lat, .cyou, .cfd — TLDs common in phishing), 32 rate-limited
+(retried on the next run).
+
+**Decision:** registries that refuse requests are respected: no disguised clients or other ways
+around the refusal. Missing registration data stays missing, with the reason stored. In Phase 2,
+the RDAP features (F46–F52) use the fixed missing value; the data card reports how often they
+are missing **per class**; and RQ1 is also reported without F46–F52, so a model cannot score
+well just because missingness differs between phishing and legitimate domains.
+
+## 2026-11-02 — Snapshot scope: all phishing URLs, top 30,000 Tranco sites (+ one page each)
+
+At ~220 URLs per minute, snapshotting all 100,000 Tranco home pages plus their links would take
+~16 hours, and the D10 link pages would only start after every home page. About 52,000
+legitimate URLs are needed to balance the phishing URLs, so the run is: (1) every phishing URL,
+(2) the top 30,000 Tranco home pages with one same-site page each (up to 60,000 legitimate URLs).
+More can be added later with `snapshot --only legitimate --limit N` (resumable).
