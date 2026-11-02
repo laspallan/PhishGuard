@@ -415,3 +415,15 @@ The URLhaus API and downloads also now need a free Auth-Key (https://auth.abuse.
 **Open for you:** either ask Spamhaus/abuse.ch for written consent, or use URLhaus only where no
 model learns from it (e.g. the D2 lookup baseline) and leave it out of `ti_score` and the
 malware labelling rule. Recorded so it is decided before Phase 3 (D2) and Phase 4.
+
+## 2026-11-02 — URLhaus only in the blocklist baseline; F65 left out (you decided)
+
+- **URLhaus** is used only for the D2 signature baseline (a lookup; no model learns from it).
+  It is removed from the malware labelling rule (it was never filled in) and is not part of
+  `ti_score` (Phase 4: VirusTotal + AlienVault OTX only). Reason: abuse.ch terms s.7.3 forbid
+  AI training without Spamhaus' written consent. **Viva:** the baseline only compares a URL to
+  a list, so it does not "train or improve" a model; the ML models never see URLhaus data.
+- **F65 suspicious_asn** is kept in the vector (the 140-feature list is fixed) but is always
+  MISSING (NaN): no IP-to-ASN data is collected. A constant column carries no information, so
+  the models ignore it; the thesis states F65 as not implemented, with the reason (needs an
+  extra IP-to-network dataset and an abuse-ASN list).

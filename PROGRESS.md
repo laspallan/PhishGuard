@@ -144,15 +144,15 @@ external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `D
 - [x] Shared pieces: `missing.py` (NaN), `hosts.py` (offline host splitting, same as ml/)
 - [x] F1–F45 `url_lexical.py`; lists for F26 (Interisle 2026 Table 2) and F27 (CC BY-SA
   shortener list, pinned commit) — 16 tests, every value hand-counted
-- [ ] F46–F65 `domain_ssl.py` (stored RDAP / DNS / TLS; F65 needs an IP-to-ASN source)
+- [ ] F46–F65 `domain_ssl.py` (stored RDAP / DNS / TLS; F65 always missing — you decided)
 - [ ] F66–F95 `html_js.py`
 - [ ] F96–F115 `email_headers.py`
 - [ ] F116–F140 `nlp_text.py` (pyspellchecker, vaderSentiment after licence check)
 - [ ] `extractor.py` (140 values in catalogue order), feature-matrix builder in `ml/`
 - [ ] Missing-value rate per feature in the data card
 
-**Open for you:** URLhaus consent (see `Docs/decisions.md`, 2026-11-02 finding) — before
-Phase 3 (D2 baseline) and Phase 4.
+**Decided 2026-11-02:** URLhaus only in the D2 blocklist baseline (removed from labelling and
+`ti_score`); F65 always missing.
 
 ## Phase 5 — Backend API and database
 

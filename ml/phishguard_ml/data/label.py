@@ -1,14 +1,15 @@
 """Step 6: attack categories by ordered rules (decision D1). First matching rule wins:
 
-1. malware             risky file extension in the URL path / an attachment, or URL on URLhaus
+1. malware             risky file extension in the URL path / an attachment
 2. brand_impersonation a known brand is named but the registered domain is not that brand's,
                        or PhishTank names a target brand for the URL (not "Other")
 3. credential_harvest  page has a password field or login form; email asks to sign in/verify
 4. spear               email greets the recipient or names their organisation
 5. unknown             none of the above
 
-Legitimate samples are never given a category. The word lists live in
-phishguard.services.features.lexicons, shared with feature extraction (Phase 2).
+URLhaus is deliberately not used: its terms forbid using the data to train AI models without
+written consent (Docs/decisions.md, 2026-11-02). Legitimate samples are never given a category.
+The word lists live in phishguard.services.features.lexicons, shared with feature extraction.
 """
 
 import re
@@ -56,11 +57,10 @@ def _has_credential_phrase(text: str) -> bool:
 def label_url(
     url: str,
     html: str | None,
-    urlhaus: frozenset[str] = frozenset(),
     phishtank_target: str | None = None,
 ) -> AttackCategory:
     normalised = clean.normalise_url(url) or url
-    if _risky_path(normalised) or normalised in urlhaus:
+    if _risky_path(normalised):
         return AttackCategory.MALWARE
     if phishtank_target:
         return AttackCategory.BRAND_IMPERSONATION
@@ -129,14 +129,13 @@ def label_email(message: EmailMessage) -> AttackCategory:
 def label_record(
     record: SampleRecord,
     html: str | None = None,
-    urlhaus: frozenset[str] = frozenset(),
     phishtank_targets: dict[str, str] | None = None,
 ) -> SampleRecord:
     if record.label is Label.LEGITIMATE:
         return record
     if record.sample_type is Modality.URL:
         target = (phishtank_targets or {}).get(clean.normalise_url(record.raw_content) or "")
-        category = label_url(record.raw_content, html, urlhaus, target)
+        category = label_url(record.raw_content, html, target)
     else:
         category = label_email(clean.parse_email(record.raw_content.encode("utf-8")))
     return record.model_copy(update={"attack_category": category})

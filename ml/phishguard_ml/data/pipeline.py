@@ -81,7 +81,7 @@ def build(*, tranco_limit: int = 100_000, enron_fraction: float = 0.1) -> dict:
     return report
 
 
-def label_all(urlhaus: frozenset[str] = frozenset()) -> Counter:
+def label_all() -> Counter:
     records = read_records(records_path())
     phishtank_days = sorted((paths.raw_dir() / Source.PHISHTANK.value).glob("*/online-valid.csv"))
     targets = parse.phishtank_targets([f.parent for f in phishtank_days])
@@ -89,7 +89,7 @@ def label_all(urlhaus: frozenset[str] = frozenset()) -> Counter:
     for record in records:
         page = load_snapshot(record, "page.html")
         html = page.decode("utf-8", errors="replace") if page else None
-        labelled.append(label.label_record(record, html, urlhaus, targets))
+        labelled.append(label.label_record(record, html, targets))
     write_records(labelled, labelled_path())
     return label.category_counts(labelled)
 

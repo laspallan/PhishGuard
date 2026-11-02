@@ -25,11 +25,6 @@ def test_url_rules(url, html, expected):
     assert label.label_url(url, html) is expected
 
 
-def test_urlhaus_listing_means_malware():
-    url = "http://x.example/a"
-    assert label.label_url(url, None, frozenset({clean.normalise_url(url)})) is C.MALWARE
-
-
 def test_rules_apply_in_order_malware_first():
     assert label.label_url("http://paypal-help.example/app.apk", LOGIN_PAGE) is C.MALWARE
 

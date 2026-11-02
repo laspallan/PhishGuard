@@ -40,7 +40,7 @@ it stays **In progress**, with the unchecked items listed.
 | Feature extractor | Computes F1–F140 (Appendix A), one code path for training and the live API | RQ1 |
 | ML engine | RF, XGBoost, LightGBM (features); LSTM, 1D-CNN, DistilBERT (raw text); soft-voting and stacking ensembles; cascade | RQ1 |
 | Signature baseline | The comparison system for RQ1 | RQ1 |
-| Threat-intelligence service | VirusTotal + AlienVault OTX + URLhaus → `ti_score` 0–100, cached | RQ2 |
+| Threat-intelligence service | VirusTotal + AlienVault OTX → `ti_score` 0–100, cached (URLhaus only in the D2 baseline: its terms forbid AI training) | RQ2 |
 | Backend API + DB | FastAPI, PostgreSQL, Redis, Celery; returns block / warn / allow | all |
 | Simulation module | GoPhish campaigns to consenting users; records clicks and the *fact* of submissions | RQ3 |
 | Feedback loop + RQ3 harness | Retrains Models A/B/C per round, promotion rule, statistics | RQ3 |
@@ -216,7 +216,7 @@ Targets: accuracy > 95%, FPR < 5%. Real numbers are reported even if targets are
 **Goal:** `ti_score` 0–100 and the with/without comparison for false positives. **Serves:** RQ2.
 
 **Build (`backend/intel/`):**
-- Clients for VirusTotal, AlienVault OTX and URLhaus (endpoints and fields checked against current official docs before coding), with timeouts, retries, rate limiting and Redis caching.
+- Clients for VirusTotal and AlienVault OTX (URLhaus is used only in the D2 blocklist baseline, never as a model input; endpoints and fields checked against current official docs before coding), with timeouts, retries, rate limiting and Redis caching.
 - Score combiner → `ti_score` 0–100, with the formula documented in `decisions.md`.
 - Offline recording of TI responses for the dataset subset (D7) with timestamps.
 - RQ2 experiment: same models trained with and without `ti_score`, compared on FPR (plus F1) with CIs and McNemar, on development CV.
