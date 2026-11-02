@@ -459,3 +459,15 @@ the legitimate emails (18,808 of 22,916), so an email model with header features
 (a) headline email results without header features F96–F115; header features evaluated only on
 SpamAssassin vs Nazario; (b) also report per legitimate source; (c) drop Enron from
 header-feature models. Recommendation: (a) + (b).
+
+## 2026-11-02 — F116–F140 text features: libraries and hand-written word lists
+
+- `pyspellchecker` 0.9.1 (MIT, PyPI `license_expression`) for F129 and `vaderSentiment` 3.3.2
+  (MIT) for F133; both work offline (VADER imports only the standard library). F130 Flesch
+  reading ease is computed with the published formula and a vowel-group syllable count.
+- The urgency / threat / reward / financial / greeting / call-to-action lists and the F138
+  weights are **our own**, written by hand before any model was trained and never tuned on the
+  data (no published list exists). **Viva:** "Aren't hand-made lists biased?" — they are
+  fixed, short, and published in `lexicons.py`; because they were never adjusted to the data,
+  they cannot leak the test set, and their effect is measured like any other feature (SHAP).
+- Run on all 32,345 real emails (normalised view): no crashes, ~10 ms per email.

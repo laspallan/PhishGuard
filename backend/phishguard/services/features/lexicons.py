@@ -119,3 +119,34 @@ SUSPICIOUS_MAILERS: tuple[re.Pattern[str], ...] = (
     re.compile(r"^Microsoft Outlook Express \d(?:\.\d+){3} \w+$"),
     re.compile(r"mPOP Web-Mail", re.IGNORECASE),
 )
+
+# Word lists for the text features F116-F140. Written by hand for this project (no published
+# list exists), fixed before any model was trained, and never tuned on the data. Matched as
+# whole words / phrases, case-insensitive.
+URGENCY_TERMS: tuple[str, ...] = (
+    "urgent", "urgently", "immediately", "immediate", "asap", "right away", "as soon as possible",
+    "now", "today", "quickly", "promptly", "final notice", "last chance", "act fast",
+)  # fmt: skip
+THREAT_TERMS: tuple[str, ...] = (
+    "suspended", "suspend", "locked", "lock", "disabled", "deactivated", "terminated", "closed",
+    "restricted", "unauthorized", "unusual activity", "suspicious activity", "legal action",
+    "penalty", "blocked", "compromised",
+)  # fmt: skip
+REWARD_TERMS: tuple[str, ...] = (
+    "prize", "winner", "won", "reward", "refund", "bonus", "gift", "free", "congratulations",
+    "claim", "lottery", "cashback", "voucher",
+)  # fmt: skip
+FINANCIAL_TERMS: tuple[str, ...] = (
+    "bank", "payment", "invoice", "transfer", "wire", "credit card", "debit card", "billing",
+    "transaction", "account balance", "funds", "tax", "salary", "bitcoin", "wallet", "paypal",
+)  # fmt: skip
+GENERIC_GREETINGS: tuple[str, ...] = (
+    "dear customer", "dear user", "dear client", "dear member", "dear valued customer",
+    "dear account holder", "dear sir", "dear madam", "dear sir/madam", "dear sir or madam",
+    "hello customer", "hello user", "dear friend", "dear beneficiary",
+)  # fmt: skip
+CALL_TO_ACTION_PHRASES: tuple[str, ...] = (
+    "click here", "click below", "click the link", "click on the link", "follow the link",
+    "act now", "verify now", "update now", "log in now", "sign in now", "confirm now",
+    "open the attachment", "download now", "respond now",
+)  # fmt: skip

@@ -18,6 +18,8 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "cryptography>=43",
     "tldextract>=5.4",  # host splitting for features, offline PSL snapshot
+    "pyspellchecker>=0.9.1",  # F129, MIT, offline word frequency list
+    "vaderSentiment>=3.3.2",  # F133, MIT, offline lexicon
 ]
 
 [project.optional-dependencies]
