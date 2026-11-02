@@ -13,6 +13,9 @@ features [--workers N]       Phase 2: F1-F140 for every record -> processed/feat
 train --modality M [--feature-set S] [--models ...] [--trials N]
                              Phase 3: tune, OOF, final model, SHAP -> data/models/
 report                       Phase 3: development results table -> data/models/results.md
+baseline-export              D2: development emails -> data/baseline/dev_emails.mbox
+baseline-import              D2: SpamAssassin scores -> data/models/baseline/ (after the
+                             `spamassassin` compose service has run)
 """
 
 import argparse
@@ -97,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--trials", type=int, default=50)
     p = sub.add_parser("report")
     p.add_argument("--n-boot", type=int, default=1000)
+    sub.add_parser("baseline-export")
+    sub.add_parser("baseline-import")
     sub.add_parser("status")
     args = parser.parse_args(argv)
     try:
@@ -170,6 +175,16 @@ def _run(args) -> int:
 
         results.build(n_boot=args.n_boot)
         print("written", results.results_path())
+    elif args.command in ("baseline-export", "baseline-import"):
+        from phishguard.models.enums import Modality
+        from phishguard_ml.evaluation import baseline
+        from phishguard_ml.training.devdata import development_records
+
+        emails = development_records(Modality.EMAIL)
+        if args.command == "baseline-export":
+            print("written", baseline.export(emails), len(emails), "emails")
+        else:
+            _print(baseline.import_scores(emails))
     return 0
 
 

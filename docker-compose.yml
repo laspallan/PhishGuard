@@ -69,5 +69,15 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
+  # --- Signature baseline (Phase 3, decision D2). Started only with `--profile baseline`. ---
+  # No network at all; sees only data/baseline/ (the exported development emails).
+  spamassassin:
+    profiles: ["baseline"]
+    build: ml/spamassassin
+    network_mode: none
+    volumes: ["./data/baseline:/work"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
 volumes:
   pgdata:

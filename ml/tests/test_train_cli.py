@@ -56,10 +56,30 @@ def test_train_and_report_end_to_end(isolated_data_dir, capsys):
     shap_rows = json.loads((folder / "shap.json").read_text())
     assert len(shap_rows) == 25 and shap_rows[0]["feature"] == "num_credential_terms"
 
+    # SpamAssassin baseline (D2): pretend it flagged every Nazario email
+    from phishguard.models.enums import Modality
+    from phishguard_ml.evaluation import baseline
+    from phishguard_ml.training.devdata import development_records
+
+    emails = development_records(Modality.EMAIL)
+    baseline.work_dir().mkdir(parents=True)
+    with (baseline.work_dir() / "scored.mbox").open("w") as out:
+        for r in emails:
+            score = 9.0 if r.source is Source.NAZARIO else 0.0
+            out.write("From x Thu Jan  1 00:00:00 1970\n")
+            out.write(f"X-Spam-Status: No, score={score} required=5.0\n")
+            out.write(f"{baseline.ID_HEADER}: {r.sample_id}\n\nx\n\n")
+    assert main(["baseline-import"]) == 0
+
     assert main(["report", "--n-boot", "20"]) == 0
     results = json.loads((isolated_data_dir / "models" / "results.json").read_text())
     rows = {r["model"]: r for r in results["email/no_header"]}
-    assert set(rows) == {"random_forest", "xgboost", "lightgbm", "soft_vote", "stacker"}
+    assert set(rows) == {
+        "random_forest", "xgboost", "lightgbm", "soft_vote", "stacker", "spamassassin_baseline",
+    }  # fmt: skip
+    sa = rows["spamassassin_baseline"]
+    assert sa["recall"] == 1 and sa["fpr"] == 0
+    assert rows["spamassassin_baseline"]["ece"] is None  # decisions, not probabilities
     assert rows["soft_vote"]["accuracy"] > 0.8  # the one informative feature is learned
     assert "mcnemar_vs_soft_vote" in rows["xgboost"]
     assert set(rows["xgboost"]["fpr_by_legitimate_source"]) == {"enron", "spamassassin"}

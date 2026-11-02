@@ -24,6 +24,7 @@ import pyarrow.parquet as pq
 from phishguard.models.enums import Label, Modality
 from phishguard.services.features.extractor import AGE_SENSITIVE, FEATURE_NAMES
 from phishguard.services.features.extractor import feature_code_hash as current_feature_hash
+from phishguard_ml.data.records import SampleRecord
 from phishguard_ml.data.split import load_split
 from phishguard_ml.features.matrix import features_path
 
@@ -100,3 +101,10 @@ def load_development(modality: Modality, feature_set_name: str = "all") -> DevDa
         sources=[r.source.value for r in chosen],
         feature_names=names,
     )
+
+
+def development_records(modality: Modality) -> list[SampleRecord]:
+    """The development records themselves (e.g. raw emails for the SpamAssassin baseline)."""
+    records, rows = load_split()
+    dev = {row["sample_id"] for row in rows if row["set"] == "dev"}
+    return [r for r in records if str(r.sample_id) in dev and r.sample_type is modality]

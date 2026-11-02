@@ -192,7 +192,9 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   Your action: install standard Python 3.11 from python.org and rebuild the venv (commands in
   the chat). torch was uninstalled again; nothing in ZKBioTime was changed.
 - [ ] 5. Cascade (tabular first, DistilBERT for scores in [0.30, 0.80]) and CPU latency
-- [ ] 6. Signature baseline (D2)
+- [x] 6. Signature baseline (D2): `evaluation/baseline.py` + `ml/spamassassin/` container
+  (SpamAssassin 4.0.1, Bayes off, no network), rows in the results table; URL baseline only in
+  RQ3 (you decided). 3 tests + end-to-end; smoke test on 300 real emails passed
 - [x] 7. `training/registry.py` (final model + calibrator on all development rows, version id,
   hashes, `registry.json`), `evaluation/shap_report.py` (TreeExplainer, mean |SHAP|),
   `evaluation/report.py` (CV table per modality / feature set, ensembles, CIs, ECE, FPR at

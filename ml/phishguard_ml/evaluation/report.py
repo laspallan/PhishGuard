@@ -18,7 +18,7 @@ import numpy as np
 import pyarrow.parquet as pq
 
 from phishguard_ml import paths
-from phishguard_ml.evaluation import metrics
+from phishguard_ml.evaluation import baseline, metrics
 from phishguard_ml.training import calibration, ensembles
 from phishguard_ml.training.tabular import MODELS
 
@@ -37,7 +37,9 @@ def _runs() -> dict[tuple[str, str], dict[str, dict]]:
 
 
 def _row(name: str, y, p, groups, sources, reference: np.ndarray | None, n_boot: int) -> dict:
+    """`p` are probabilities, or 0/1 decisions for the signature baseline (no calibration)."""
     predicted = (p >= THRESHOLD).astype(int)
+    is_probability = not np.isin(p, (0, 1)).all()
     legitimate = y == 0
     per_source = {
         str(s): metrics.scores(
@@ -50,9 +52,9 @@ def _row(name: str, y, p, groups, sources, reference: np.ndarray | None, n_boot:
         "n": int(len(y)),
         **asdict(metrics.scores(y, predicted)),
         "ci95": metrics.bootstrap_ci(y, predicted, list(groups), n_boot=n_boot),
-        "ece": metrics.expected_calibration_error(y, p),
-        "fpr_at_warn": metrics.scores_at(y, p, ensembles.WARN).fpr,
-        "fpr_at_block": metrics.scores_at(y, p, ensembles.BLOCK).fpr,
+        "ece": metrics.expected_calibration_error(y, p) if is_probability else None,
+        "fpr_at_warn": metrics.scores_at(y, p, ensembles.WARN).fpr if is_probability else None,
+        "fpr_at_block": metrics.scores_at(y, p, ensembles.BLOCK).fpr if is_probability else None,
         "fpr_by_legitimate_source": per_source,
     }
     if reference is not None:
@@ -78,6 +80,12 @@ def build(n_boot: int = 1000) -> dict:
             candidates["stacker"] = ensembles.stacked_out_of_fold(
                 [raw[m] for m in MODELS], y, folds
             )
+        detected = baseline.load() if modality == "email" else None
+        if detected is not None:
+            ids = first["sample_id"]
+            if any(str(i) not in detected for i in ids):
+                raise ValueError("the SpamAssassin baseline does not cover every development email")
+            candidates["spamassassin_baseline"] = np.array([float(detected[str(i)]) for i in ids])
         reference = (
             (candidates["soft_vote"] >= THRESHOLD).astype(int)
             if "soft_vote" in candidates

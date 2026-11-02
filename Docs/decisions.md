@@ -520,3 +520,22 @@ header-feature models. Recommendation: (a) + (b).
 - **Cascade:** inside [0.30, 0.80] (inclusive) the text model's probability replaces the
   tabular one. **Thresholds** stay 0.60 / 0.90; `threshold_for_fpr` exists if you later want a
   threshold chosen for a target false-positive rate on development OOF data.
+
+## 2026-11-03 — D2 signature baseline built (emails: SpamAssassin; URLs: RQ3 only)
+
+- **Emails:** Debian 13's `spamassassin` package (SpamAssassin 4.0.1, Apache-2.0, the rules it
+  ships; `sa-update` never run, so the rule set is fixed) in our own container
+  (`ml/spamassassin/Dockerfile`, compose profile `baseline`, `network_mode: none`, non-root).
+  Options checked in the container: `--mbox -L -t`, `--cf='use_bayes 0'`,
+  `--cf='bayes_auto_learn 0'`, `--cf='report_safe 0'`; detected = score ≥ required (5.0).
+  Raw emails are scored. Smoke test on 300 real emails: Nazario 82/100 flagged, SpamAssassin
+  ham 3/100, Enron 0/100; ~0.08 s per email.
+- `report_safe 0` was needed: by default SpamAssassin wraps spam in a new report message, which
+  hid our ID header for exactly the flagged emails (found in the smoke test; the importer
+  refuses any run where an exported email has no result).
+- **Threat to validity:** the SpamAssassin public ham corpus is likely to have been used when
+  SpamAssassin's rule scores were tuned, so the baseline FPR on that source may be optimistic;
+  per-source FPR is reported.
+- **URLs (decided 2026-11-03):** no RQ1 URL baseline — every phishing URL came from the
+  blocklists on its collection day, so a lookup would find all of them by construction. The
+  lookup baseline is used in the RQ3 rounds (lists from earlier days vs URLs first seen later).
