@@ -54,8 +54,25 @@ collector service is added to `docker-compose.yml` in Phase 1.
 
 ## Phase 1 — Data and split
 
-**Status:** Not started. Decisions D1 (category labelling), D3 (URL/email split) and D4
-(grouping key) were deferred on 2026-11-02 and must be settled before this phase starts.
+**Status:** In progress. D1, D3, D4 decided 2026-11-02. **D9 open:** the free phishing feeds
+probably list only URLs online now, not 2021–2026 history (option a: reword the proposal;
+option b: add an archived dataset). Needed before step 7.
+
+**Steps:**
+- [x] 1. `ml/` package (`phishguard_ml`), paths, `SampleRecord` format, Parquet read/write
+  — 15 tests pass, ruff clean (2026-11-02)
+- [ ] 2. Downloaders with manifests (verify each source's format first)
+- [ ] 3. Cleaning: URL normalisation, email parsing, de-duplication
+- [ ] 4. Email time-clue normaliser (§3.6.1)
+- [ ] 5. Snapshot collector container (GET only; HTML, DNS, TLS, RDAP)
+- [ ] 6. Category labeller (D1)
+- [ ] 7. Count cleaned sources → you fix the URL/email mix (D3); D9 must be settled
+- [ ] 8. Sampling, grouped split (D4), 5 CV folds, split hash test
+- [ ] 9. Daily/monthly collector (compose service) and own-mailbox check set loader
+- [ ] 10. `data_card.md` from script output; Phase 1 verification
+
+**Approved choices:** Parquet; httpx, tldextract (offline PSL), dnspython, ssl, RDAP,
+StratifiedGroupKFold; `ml/` as its own package; collector as a compose service.
 
 ## Phase 5 — Backend API and database
 

@@ -1,15 +1,51 @@
 # PhishGuard ML pipeline
 
 Offline research pipeline: builds the dataset, trains and evaluates the models, and runs the
-RQ1–RQ3 experiments. It imports shared code (such as the F1–F140 feature extractor) from the
-`phishguard` package in `backend/`, so training and the live API use the same code.
+RQ1–RQ3 experiments. It is the Python package `phishguard_ml` and imports shared code (the
+F1–F140 feature extractor, the enum values) from the `phishguard` package in `backend/`, so
+training and the live API use the same code.
 
 ```
-data/         downloaders, cleaning, labelling, sampling, split, monthly collector (Phase 1)
-training/     model training, tuning, calibration, ensembles, RQ3 harness (Phases 3 and 6)
-evaluation/   metrics, confidence intervals, McNemar, final evaluation (Phases 3 and 8)
-notebooks/    exploration only; no result in the thesis comes only from a notebook
+phishguard_ml/
+  paths.py      where data is read and written (repo-root data/, or PHISHGUARD_DATA_DIR)
+  data/         records, downloaders, cleaning, labelling, sampling, split (Phase 1)
+  training/     training, tuning, calibration, ensembles, RQ3 harness (Phases 3 and 6)
+  evaluation/   metrics, confidence intervals, McNemar, final evaluation (Phases 3 and 8)
+notebooks/      exploration only; no result in the thesis comes only from a notebook
+tests/
 ```
 
 This folder holds **code**. The data itself lives in `/data/` at the repo root (gitignored):
 `raw/`, `snapshots/`, `processed/`, `splits/`.
+
+## The record format
+
+Every source is converted to one `SampleRecord` (`phishguard_ml/data/records.py`) and stored
+as Parquet with a fixed schema:
+
+| Field | Meaning |
+|---|---|
+| `sample_id` | UUID v5 of sample type + content hash: same content → same id |
+| `sample_type` | `url` or `email` (from the source) |
+| `raw_content` | the URL, or the full email as received |
+| `label` | `phishing` or `legitimate` (from the source) |
+| `attack_category` | decision D1 rules; always empty for legitimate samples |
+| `source` | phishtank, openphish, tranco, nazario, spamassassin, enron, own_mailbox |
+| `source_date` | date given by the source, if any |
+| `collected_at` | when we downloaded it (UTC) |
+| `group_key` | split grouping key (decision D4) |
+| `content_hash` | SHA-256 of the normalised content (used for de-duplication) |
+| `snapshot_ref` | URLs only: where the page/DNS/TLS/RDAP snapshot is stored |
+
+## Install and test (PowerShell)
+
+The `phishguard` package is installed from `../backend` first; it is deliberately not listed
+as a dependency in `pyproject.toml`, so pip never fetches an unrelated package of the same
+name from PyPI.
+
+```powershell
+# from the repo root, with the backend venv active (.\backend\.venv\Scripts\Activate.ps1)
+make install      # installs backend and ml
+make test
+make lint
+```

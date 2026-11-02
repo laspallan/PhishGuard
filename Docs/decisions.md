@@ -129,3 +129,74 @@ same schema works on SQLite for fast unit tests.
 
 **Alternative:** native PostgreSQL `ENUM` types. Not chosen because changing them needs
 special migration steps and they do not exist in SQLite.
+
+## 2026-11-02 — D1: Attack categories come from ordered rules
+
+**Decision:** each phishing sample gets the first category whose rule matches:
+1. `malware`: the URL path ends in a risky file extension (e.g. .exe, .scr, .zip, .js, .iso),
+   or the URL is listed by URLhaus.
+2. `brand_impersonation`: a known brand appears in the URL, page title or email text, but the
+   registered domain is not that brand's.
+3. `credential_harvest`: the page has a password field or a login form, or the email asks the
+   reader to sign in or verify an account.
+4. `spear`: the email addresses the recipient or their organisation by name.
+5. `unknown`: none of the above.
+Legitimate samples have no attack category. The exact word lists and the counts per rule are
+recorded in `Docs/data_card.md`.
+
+**Why:** none of the sources label attack categories, so a transparent, repeatable rule set is
+the only option that can be rebuilt from the scripts and checked by an examiner.
+
+**Alternative:** hand-labelling. Not chosen for 87,500 phishing samples (too slow, hard to
+reproduce); a small hand-checked sample is used instead to report how often the rules agree
+with a human.
+
+## 2026-11-02 — D3: URL/email mix is fixed after counting the cleaned sources
+
+**Decision:** all sources are downloaded and cleaned first. The URL/email split of the
+175,000 samples is then chosen from the real counts (a URL-heavy split is expected because the
+Nazario corpus is small), with each modality kept 50% phishing / 50% legitimate.
+
+**Why:** fixing the mix before counting could require more phishing emails than exist, which
+would force duplicates or oversampling.
+
+**Alternative:** an even 87,500/87,500 split. Not chosen because it probably needs more
+phishing emails than the Nazario corpus contains. URLs and emails are reported separately, so
+an uneven mix does not hide weak email results.
+
+## 2026-11-02 — D4: Grouping key for the split
+
+**Decision:** URLs are grouped by registered domain (eTLD+1, using the Public Suffix List);
+emails are grouped by sender address, and Enron emails by mailbox owner. Groups never cross
+the locked-test / development boundary or the CV folds.
+
+**Why:** grouping keeps near-duplicates (same phishing domain, same sender) on one side of the
+split, so the test set measures generalisation rather than memorisation.
+
+**Alternative:** grouping emails by sender domain. Not chosen because every Enron email shares
+`enron.com`, which would put the whole Enron corpus on one side of the split.
+
+## 2026-11-02 — Dataset records: Parquet, UUID v5 sample ids
+
+**Decision:** every source is converted to one `SampleRecord` schema and stored as Parquet.
+`sample_id` is a UUID version 5 derived from the sample type and the content hash.
+
+**Why:** Parquet keeps column types (dates, timestamps, nulls) and handles large email bodies
+safely. A content-derived UUID means identical content gets the same id across sources and
+across rebuilds, so de-duplication and the frozen split stay reproducible, while keeping the
+"all ids are UUIDs" rule.
+
+**Alternative:** CSV with random UUIDs. Not chosen: CSV loses types and breaks on commas and
+newlines inside emails, and random ids would change every time the dataset is rebuilt.
+
+## 2026-11-02 — `ml/` is its own package, `phishguard_ml`
+
+**Decision:** `ml/` is an installable package that uses the local `phishguard` package but
+does not declare it as a pip dependency.
+
+**Why:** heavy data and ML libraries stay out of the API's Docker image. Declaring
+`phishguard` as a dependency would make pip look for it on PyPI, where an unrelated package
+with that name could be installed (a supply-chain risk).
+
+**Alternative:** putting the pipeline inside the backend package. Not chosen for the image
+size reason above (see D0).

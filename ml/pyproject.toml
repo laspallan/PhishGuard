@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phishguard-ml"
+version = "0.1.0"
+description = "PhishGuard offline pipeline: dataset, training, evaluation"
+requires-python = ">=3.11"
+# Also needs the local `phishguard` package from ../backend (install both, see README).
+# It is not listed here on purpose: pip would otherwise try PyPI, where an unrelated
+# package with the same name could be installed instead.
+# Each Phase 1 step adds the libraries it needs.
+dependencies = [
+    "pyarrow>=17",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[tool.setuptools.packages.find]
+include = ["phishguard_ml*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["phishguard", "phishguard_ml"]
