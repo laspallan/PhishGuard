@@ -144,7 +144,9 @@ external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `D
 - [x] Shared pieces: `missing.py` (NaN), `hosts.py` (offline host splitting, same as ml/)
 - [x] F1–F45 `url_lexical.py`; lists for F26 (Interisle 2026 Table 2) and F27 (CC BY-SA
   shortener list, pinned commit) — 16 tests, every value hand-counted
-- [ ] F46–F65 `domain_ssl.py` (stored RDAP / DNS / TLS; F65 always missing — you decided)
+- [x] F46–F65 `domain_ssl.py` (stored RDAP / DNS / TLS; F65 always missing — you decided) —
+  12 tests; ages measured at capture time, RDAP changes after capture = missing (leak guard);
+  checked on 3,000 real snapshots: no crashes, plausible ranges
 - [ ] F66–F95 `html_js.py`
 - [ ] F96–F115 `email_headers.py`
 - [ ] F116–F140 `nlp_text.py` (pyspellchecker, vaderSentiment after licence check)

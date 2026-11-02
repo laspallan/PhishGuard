@@ -427,3 +427,13 @@ malware labelling rule. Recorded so it is decided before Phase 3 (D2) and Phase 
   MISSING (NaN): no IP-to-ASN data is collected. A constant column carries no information, so
   the models ignore it; the thesis states F65 as not implemented, with the reason (needs an
   extra IP-to-network dataset and an abuse-ASN list).
+
+## 2026-11-02 — F46–F65: measured at capture time; RDAP changes after capture are not used
+
+RDAP was queried hours or days after each page was captured. A phishing domain that was taken
+down in between shows a fresh "last changed" date, which would tell the model the label.
+**Decision:** all ages (domain, certificate) are measured at the capture time stored in the
+snapshot; F51 is MISSING when "last changed" is after the capture. Thin registries (.com,
+Verisign) hold no registrant, so F50/F52 are MISSING there, not 0. Exact rules are in the
+`domain_ssl.py` docstring. **Viva:** a feature must be computable at the moment of detection;
+anything recorded later can only be used if it could not have been affected by the label.
