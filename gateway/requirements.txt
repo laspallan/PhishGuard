@@ -1,0 +1,4 @@
+httpx
+imapclient
+python-dateutil
+pydantic-settings
