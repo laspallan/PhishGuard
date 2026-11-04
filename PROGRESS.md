@@ -202,6 +202,17 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   commands — end-to-end test on synthetic data
 - [ ] 8. Real runs once the split exists
 
+## Phase 4 — Threat-intelligence service and RQ2
+
+**Status:** In progress (clients built 2026-11-04 in commit bf4574d, fixed after review).
+- [x] VirusTotal (read-only, never submits URLs) and AlienVault OTX clients; async rate limits
+  (VirusTotal public: 4/min, 500/day); cache (Redis or bounded memory, errors not cached);
+  offline recorder of raw responses with timestamps — tests offline (mocked HTTP)
+- [ ] **Your decision:** the `ti_score` formula (`services/intel/scoring.py` has unagreed
+  weights) and the size of the D7 subset; check OTX field names on one real response
+- [ ] Record TI responses for the subset; RQ2 with / without `ti_score` (CIs, McNemar)
+- [ ] Your action: free VirusTotal and OTX keys in `.env`
+
 ## Phase 5 — Backend API and database
 
 **Status:** In progress (database part built early, 2026-11-02)
@@ -229,5 +240,27 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   hang. `.env.example` and `.env` now use `127.0.0.1`.
 - Cross-table rule "holdout template → usage sim_holdout" is left for the Phase 6 controller.
 
-**Still open in Phase 5:** endpoints, inference service, Celery worker, feature-parity test,
-latency measurement.
+**Added 2026-11-04 (commit bf4574d, fixed after review):** `/scan/url`, `/scan/email`,
+`/models`, `/admin/status` behind the X-API-Key (fail closed outside development); scans
+answer 503 until a trained model is wired in (no placeholder verdicts); model registry reader;
+real feature-parity check (`feature_code_hash`); Celery app skeleton.
+
+**Still open in Phase 5:** live scoring with registered models (needs Phase 3 training),
+collecting live URL evidence for F46–F95 without breaking the snapshot-only fetch rule
+(design needed), saving scans to the database, Celery tasks, latency measurement.
+
+**Your decision (kept untouched):** duplicated code from bf4574d — `simulation/gophish.py` vs
+`gophish_client.py`, `TemplateType` / `SimulationEvent` next to `models.enums`
+(`TemplateSplit`, `EventType`), the unused `inference/persist.py`, two `RQ3Harness` classes.
+
+## Phase 7 — Browser extension and email gateway
+
+**Status:** In progress (skeletons 2026-11-04 in commit bf4574d, fixed after review).
+- [x] Extension (MV3): settings popup (API address + key), warning page for "block", badge
+  for "warn", nothing on errors / 503; `manifest.json` now in `public/` so `dist/` loads;
+  pure logic unit-tested (5 tests); in `make lint` / `make test`
+- [x] IMAP gateway: `BODY.PEEK[]` (mail stays unread), last UID per UIDVALIDITY in a state
+  file (each email once), stops and retries on API errors / 503, logging, non-root image,
+  pinned requirements; 6 offline tests (fake IMAP, mocked API); in `make lint` / `make test`
+- [ ] Visual-similarity check (decision D6); check before page display (declarativeNetRequest)
+- [ ] End-to-end test against a running API with a trained model (after Phase 5)

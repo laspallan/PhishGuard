@@ -1,11 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>PhishGuard</title>
+    <style>
+      body { font: 14px system-ui, sans-serif; width: 280px; margin: 12px; }
+      label { display: block; margin-top: 8px; }
+      input { width: 100%; box-sizing: border-box; }
+      button { margin-top: 10px; }
+    </style>
   </head>
   <body>
     <h3>PhishGuard</h3>
-    <p>Phishing protection active</p>
+    <form id="settings">
+      <label>API address <input id="apiBaseUrl" type="url" required /></label>
+      <label>API key <input id="apiKey" type="password" autocomplete="off" /></label>
+      <button type="submit">Save</button>
+    </form>
+    <p id="status" role="status"></p>
+    <script type="module" src="popup.js"></script>
   </body>
 </html>

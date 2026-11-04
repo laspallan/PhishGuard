@@ -1,4 +1,5 @@
-httpx
-imapclient
-python-dateutil
-pydantic-settings
+# Versions checked 2026-11-04. IMAPClient: BSD-3-Clause; httpx: BSD-3-Clause;
+# pydantic-settings: MIT.
+httpx>=0.28,<1
+IMAPClient>=4.1,<5
+pydantic-settings>=2.6,<3
