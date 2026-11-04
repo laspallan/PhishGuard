@@ -1,19 +1,5 @@
-"""Simulation service."""
+"""GoPhish client and simulation logic (Phase 6, after university ethics approval).
 
-from __future__ import annotations
-
-from phishguard.services.simulation.events import SimulationEvent
-from phishguard.services.simulation.gophish import GoPhishClient
-from phishguard.services.simulation.templates import TemplateType
-
-
-class SimulationService:
-    def __init__(self):
-        self.client = GoPhishClient()
-
-    async def create_campaign(self, name: str, template_type: TemplateType):
-        campaign = {"name": name, "template_type": template_type.value}
-        return await self.client.create_campaign(campaign)
-
-
-__all__ = ["GoPhishClient", "SimulationEvent", "SimulationService", "TemplateType"]
+Template splits and event types are defined once, in phishguard.models.enums
+(TemplateSplit, EventType: only the fact of a submission is stored, never its values).
+"""

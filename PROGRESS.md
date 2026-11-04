@@ -249,9 +249,11 @@ real feature-parity check (`feature_code_hash`); Celery app skeleton.
 collecting live URL evidence for F46–F95 without breaking the snapshot-only fetch rule
 (design needed), saving scans to the database, Celery tasks, latency measurement.
 
-**Your decision (kept untouched):** duplicated code from bf4574d — `simulation/gophish.py` vs
-`gophish_client.py`, `TemplateType` / `SimulationEvent` next to `models.enums`
-(`TemplateSplit`, `EventType`), the unused `inference/persist.py`, two `RQ3Harness` classes.
+**Removed 2026-11-04 (you decided):** the duplicate / placeholder files from bf4574d —
+`simulation/gophish.py`, `gophish_client.py`, `templates.py`, `events.py` (duplicated
+`models.enums`), `inference/persist.py`, `workers/tasks.py`, `ml` `rq3.py`, `rq3_harness.py`,
+`rq2.py`, `transformer.py`, and the extension's empty content script. Their work stays in the
+plan (Phases 3, 4, 5, 6).
 
 ## Phase 7 — Browser extension and email gateway
 

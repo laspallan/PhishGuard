@@ -571,3 +571,13 @@ Found in review and fixed (tests added, all offline):
 Phase 4; duplicated simulation code (`gophish.py` / `gophish_client.py`, `TemplateType` /
 `SimulationEvent` next to `models.enums`), the unused `inference/persist.py` stub, and the two
 `RQ3Harness` classes — kept untouched until you decide.
+
+## 2026-11-04 — Duplicate and placeholder files removed (you decided)
+
+Removed because they duplicated existing definitions or held no logic (only invented or
+"queued" results): GoPhish client stubs (two copies), `TemplateType` / `SimulationEvent`
+(duplicates of `models.enums.TemplateSplit` / `EventType`), `inference/persist.py`,
+`workers/tasks.py`, two `RQ3Harness` copies, `RQ2Experiment`, `DistilBERTTrainer`, and the
+extension content script that only logged to the console (it also ran on every page). The real
+work is planned in Phases 3 (DistilBERT), 4 (RQ2), 5 (persisting scans, Celery tasks) and
+6 (simulation, RQ3).

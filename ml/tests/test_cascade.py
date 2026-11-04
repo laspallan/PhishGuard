@@ -1,9 +1,7 @@
 import numpy as np
 import pytest
 
-from phishguard_ml.evaluation.rq2 import RQ2Experiment
 from phishguard_ml.training.cascade import Cascade
-from phishguard_ml.training.rq3_harness import RQ3Harness
 
 
 class Fixed:
@@ -30,10 +28,3 @@ def test_cascade_asks_the_text_model_only_inside_the_band():
 def test_cascade_requires_the_text_model():
     with pytest.raises(ValueError):
         Cascade(Fixed([0.5]), None).predict_proba(np.zeros((1, 2)), ["a"])
-
-
-def test_unbuilt_experiments_refuse_instead_of_returning_numbers():
-    with pytest.raises(NotImplementedError):
-        RQ2Experiment().run(None, None, None)
-    with pytest.raises(NotImplementedError):
-        RQ3Harness().run_round(1, None, None)
