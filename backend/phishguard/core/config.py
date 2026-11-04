@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     encryption_key: SecretStr | None = None
     # Separate secret for the email blind index (HMAC-SHA256), so lookups work on encrypted data.
     email_hash_key: SecretStr | None = None
+    # Threat intelligence
+    virustotal_api_key: SecretStr | None = None
+    alienvault_otx_api_key: SecretStr | None = None
+    ti_offline: bool = False
 
 
 @lru_cache
