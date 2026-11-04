@@ -67,6 +67,7 @@ Targets: accuracy > 95%, FPR < 5%. Real numbers are reported even if targets are
 | D8 | Start date, so the 24-week timeline has real dates. | Phase 0 | Fill in Section 5. |
 | D9 | **Decided 2026-11-02: option (a).** The proposal says phishing URLs cover 2021–2026, but the free feeds list only URLs online *now* — **confirmed 2026-11-02**: PhishTank's developer page says its files contain "only online phishes"; OpenPhish's free feed has no archive (its 30-day archive needs the Academic Use Program). Option (a): keep the sources and reword to "collected from <start date> onward"; (b): add an archived phishing-URL dataset (changes the fixed source list). | Before step 8 of Phase 1 (split) | (a). Finding 2026-11-02: PhishTank submission dates already span 2021–2026 (see `Docs/decisions.md`). |
 | D10 | **Decided 2026-11-02: (a) + (c).** Legitimate URLs from Tranco are home pages only; phishing URLs have paths, so URL shape alone separates the classes. | Before step 8 of Phase 1 (split) | (a) add same-site links from Tranco pages during snapshotting, plus (c) report URL results with and without path features. See `Docs/decisions.md`. |
+| D11 | Live URL scanning without the API fetching pages (evidence collector, two stages, deployed feature set, rebinding fix). | Phase 5 | Proposal in `Docs/live_url_scanning.md` (2026-11-05), section 8: D11a–D11f. **Not yet agreed.** |
 
 ---
 
