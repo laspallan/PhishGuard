@@ -1,4 +1,5 @@
 """Celery app for background tasks (Phase 5)."""
+
 from __future__ import annotations
 
 from celery import Celery

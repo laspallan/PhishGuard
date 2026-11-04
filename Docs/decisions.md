@@ -539,3 +539,35 @@ header-feature models. Recommendation: (a) + (b).
 - **URLs (decided 2026-11-03):** no RQ1 URL baseline — every phishing URL came from the
   blocklists on its collection day, so a lookup would find all of them by construction. The
   lookup baseline is used in the RQ3 rounds (lists from earlier days vs URLs first seen later).
+
+## 2026-11-04 — Review fixes to the Phase 3–7 scaffolding (commit bf4574d)
+
+Found in review and fixed (tests added, all offline):
+- **API startup:** the backend imported `phishguard_ml`, which the API image does not contain;
+  the data folder now comes from settings (`PHISHGUARD_DATA_DIR`, same variable as ml/).
+- **Registry:** `registry.json` is a list; the loader called `.get()` on it (crash after the
+  first trained model).
+- **Auth:** `require_api_key` existed but no route used it. Now on `/scan`, `/models`,
+  `/admin`; fails closed outside development (503 without a configured key); constant-time
+  comparison; `/health` stays public.
+- **No placeholder verdicts:** scans answered "allow" from a fixed heuristic. They now answer
+  503 until a trained model is wired in (Phase 5), so the gateway / extension never act on it.
+- **VirusTotal is read-only:** the client submitted unknown URLs for scanning, which makes them
+  visible to other VirusTotal users (visited URLs can hold reset tokens). **Viva:** a detector
+  must not leak the URLs it is asked about to a third party.
+- **Rate limits:** async (the old limiter blocked the event loop with time.sleep) and the
+  documented VirusTotal public limits (4/min, 500/day; it was 15/min, no daily cap).
+- **Cache:** failed / incomplete lookups are not cached (a 429 was remembered as "clean" for
+  an hour); Redis is used when configured; the in-memory fallback is bounded. No keys or
+  offline mode give ti_score = None ("unknown"), not 0.
+- **Tests** no longer call real APIs or leak environment variables.
+- **ml stubs** that returned invented 0.0 results (RQ2, RQ3) now raise NotImplementedError;
+  `Cascade` uses the tested `ensembles.cascade` rule.
+- `.env.example`: the PhishTank variables (still used by the collector) are back;
+  `PHISHGUARD_API_KEY` and `PHISHGUARD_DATA_DIR` added.
+
+**Still open (your decision):** the `ti_score` formula in `services/intel/scoring.py` (weights
+10/3/4, caps 60/40; OTX `pulse_info` is not in the OTX docs) — to be settled at the start of
+Phase 4; duplicated simulation code (`gophish.py` / `gophish_client.py`, `TemplateType` /
+`SimulationEvent` next to `models.enums`), the unused `inference/persist.py` stub, and the two
+`RQ3Harness` classes — kept untouched until you decide.

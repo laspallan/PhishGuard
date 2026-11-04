@@ -78,8 +78,9 @@ Training (`ml/`) and the live API call the same function:
 
 ```python
 from phishguard.services.features.extractor import UrlEvidence, email_features, url_features
+
 url_features(UrlEvidence(url=..., captured_at=..., html=..., dns=..., tls=..., rdap=...), ranks)
-email_features(raw_email, ranks)    # ranks: Tranco registered domain -> rank
+email_features(raw_email, ranks)  # ranks: Tranco registered domain -> rank
 ```
 
 | Module | Features | Reads |

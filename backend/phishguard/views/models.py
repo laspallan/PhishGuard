@@ -1,12 +1,14 @@
 """Models views."""
+
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from phishguard.controllers.models_controller import ModelsController
+from phishguard.core.auth import require_api_key
 from phishguard.schemas.models import ModelsResponse
 
-router = APIRouter(prefix="/models", tags=["models"])
+router = APIRouter(prefix="/models", tags=["models"], dependencies=[Depends(require_api_key)])
 controller = ModelsController()
 
 

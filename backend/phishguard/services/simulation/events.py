@@ -1,4 +1,5 @@
 """Simulation event store (Phase 6). No credential values stored."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

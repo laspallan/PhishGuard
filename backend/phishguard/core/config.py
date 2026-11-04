@@ -5,6 +5,7 @@ A .env file is read from the repo root (../.env) or from backend/ (.env).
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,7 +26,12 @@ class Settings(BaseSettings):
     encryption_key: SecretStr | None = None
     # Separate secret for the email blind index (HMAC-SHA256), so lookups work on encrypted data.
     email_hash_key: SecretStr | None = None
-    # Threat intelligence
+    # Shared secret sent by the extension, gateway and dashboard in the X-API-Key header.
+    # Required outside development; without it the protected endpoints answer 503.
+    api_key: SecretStr | None = None
+    # Data folder shared with ml/ (models/, ti_responses/). Same variable as the pipeline uses.
+    data_dir: Path = Path(__file__).resolve().parents[3] / "data"
+    # Threat intelligence (Phase 4)
     virustotal_api_key: SecretStr | None = None
     alienvault_otx_api_key: SecretStr | None = None
     ti_offline: bool = False

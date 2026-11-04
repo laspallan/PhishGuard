@@ -1,4 +1,5 @@
 """Background tasks."""
+
 from __future__ import annotations
 
 from phishguard.workers.celery_app import app

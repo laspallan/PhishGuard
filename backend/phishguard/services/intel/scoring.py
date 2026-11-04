@@ -1,4 +1,5 @@
 """Combine VT and OTX into ti_score (0-100)."""
+
 from __future__ import annotations
 
 from typing import Any

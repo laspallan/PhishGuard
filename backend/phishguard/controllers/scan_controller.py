@@ -1,4 +1,5 @@
 """Scan controller."""
+
 from __future__ import annotations
 
 from phishguard.services.inference import InferenceService

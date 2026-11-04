@@ -1,4 +1,5 @@
 """Persist scan results to database."""
+
 from __future__ import annotations
 
 from typing import Any

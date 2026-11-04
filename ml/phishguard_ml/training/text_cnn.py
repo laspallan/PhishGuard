@@ -1,4 +1,5 @@
 """1D-CNN for text classification."""
+
 from __future__ import annotations
 
 import torch
@@ -6,7 +7,14 @@ import torch.nn as nn
 
 
 class TextCNN(nn.Module):
-    def __init__(self, vocab_size: int, embed_dim: int = 128, num_filters: int = 100, filter_sizes: list = None, dropout: float = 0.3):
+    def __init__(
+        self,
+        vocab_size: int,
+        embed_dim: int = 128,
+        num_filters: int = 100,
+        filter_sizes: list = None,
+        dropout: float = 0.3,
+    ):
         super().__init__()
         if filter_sizes is None:
             filter_sizes = [3, 4, 5]

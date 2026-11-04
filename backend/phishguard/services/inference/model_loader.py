@@ -1,30 +1,32 @@
-"""Load trained models from registry for inference."""
-from __future__ import annotations
+"""Reads the model registry written by the training pipeline (ml/.../training/registry.py).
+
+`<data_dir>/models/registry.json` is a JSON list of registered versions. The backend does not
+import the ml package (the API image contains only the backend), so the path comes from the
+settings (PHISHGUARD_DATA_DIR).
+"""
 
 import json
 from pathlib import Path
 from typing import Any
 
+from phishguard.core.config import get_settings
+
 
 class ModelLoader:
     def __init__(self, models_dir: Path | None = None):
-        if models_dir is None:
-            from phishguard_ml import paths
+        self.models_dir = Path(models_dir or get_settings().data_dir / "models")
+        self.entries: list[dict[str, Any]] = []
 
-            models_dir = paths.models_dir()
-        self.models_dir = Path(models_dir)
-        self.loaded = False
-        self.metadata: dict[str, Any] = {}
+    def load_registry(self) -> list[dict[str, Any]]:
+        """Registered versions, or [] if there is no (readable) registry yet."""
+        path = self.models_dir / "registry.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = []
+        self.entries = [e for e in data if isinstance(e, dict)] if isinstance(data, list) else []
+        return self.entries
 
-    def load_registry(self) -> dict[str, Any]:
-        registry_path = self.models_dir / "registry.json"
-        if registry_path.exists():
-            try:
-                with registry_path.open() as f:
-                    self.metadata = json.load(f)
-                self.loaded = True
-                return self.metadata
-            except Exception:
-                pass
-        self.loaded = False
-        return {}
+    @property
+    def loaded(self) -> bool:
+        return bool(self.entries)
