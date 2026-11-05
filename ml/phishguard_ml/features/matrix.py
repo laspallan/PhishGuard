@@ -8,7 +8,6 @@ Pages that exist but cannot be read (e.g. blocked by antivirus) are counted in t
 treated as "no HTML", so a loss of pages is visible, never silent.
 """
 
-import codecs
 import csv
 import io
 import json
@@ -18,15 +17,14 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from phishguard.models.enums import Modality
+from phishguard.services.evidence import build_url_evidence, rdap_domain
 from phishguard.services.features import extractor
 from phishguard.services.features.extractor import FEATURE_NAMES, UrlEvidence
-from phishguard.services.features.hosts import split_host
 from phishguard_ml import paths
 from phishguard_ml.data.download import latest_download
 from phishguard_ml.data.records import SampleRecord, Source
@@ -63,43 +61,25 @@ def _json(path: Path) -> dict | None:
         return None
 
 
-def _charset(content_type: str | None) -> str:
-    for part in (content_type or "").split(";"):
-        key, _, value = part.strip().partition("=")
-        if key.lower() == "charset" and value:
-            try:
-                return codecs.lookup(value.strip("\"' ")).name
-            except LookupError:
-                break
-    return "utf-8"
-
-
 def url_evidence(record: SampleRecord) -> tuple[UrlEvidence, str]:
-    """Evidence for one URL record, and how its page was found ("ok", "none", "unreadable")."""
+    """Evidence for one URL record, and how its page was found ("ok", "none", "unreadable").
+
+    Reads the stored snapshot files; the backend's build_url_evidence (shared with the live
+    API) turns them into UrlEvidence."""
     folder = paths.data_dir() / record.snapshot_ref if record.snapshot_ref else None
-    meta = _json(folder / "meta.json") if folder else None
-    html, page_state = None, "none"
+    page, page_state = None, "none"
     if folder and (folder / "page.html").exists():
         try:
-            html = (
-                (folder / "page.html")
-                .read_bytes()
-                .decode(_charset((meta or {}).get("content_type")), errors="replace")
-            )
+            page = (folder / "page.html").read_bytes()
             page_state = "ok"
         except OSError:
             page_state = "unreadable"
-    try:
-        host = urlsplit(record.raw_content.strip()).hostname or ""
-    except ValueError:
-        host = ""
-    domain = split_host(host).registered_domain if host else ""
-    captured = (meta or {}).get("fetched_at")
-    evidence = UrlEvidence(
-        url=record.raw_content,
-        captured_at=datetime.fromisoformat(captured) if captured else record.collected_at,
-        html=html,
-        final_url=(meta or {}).get("final_url"),
+    domain = rdap_domain(record.raw_content)
+    evidence = build_url_evidence(
+        record.raw_content,
+        record.collected_at,
+        meta=_json(folder / "meta.json") if folder else None,
+        page=page,
         dns=_json(folder / "dns.json") if folder else None,
         tls=_json(folder / "tls.json") if folder else None,
         rdap=_json(paths.data_dir() / "rdap" / f"{domain}.json") if domain else None,

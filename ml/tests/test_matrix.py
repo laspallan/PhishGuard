@@ -86,3 +86,40 @@ def test_tranco_ranks_from_the_downloaded_zip(tmp_path):
         archive.writestr("top-1m.csv", "1,google.com\n2,Example-Test.com\n")
     (tmp_path / "top-1m.csv.zip").write_bytes(buffer.getvalue())
     assert matrix.load_tranco_ranks(tmp_path) == {"google.com": 1, "example-test.com": 2}
+
+
+def test_training_and_live_paths_give_the_same_140_values(isolated_data_dir):
+    """D11 step 2 parity: a stored snapshot (training) and the same evidence as the
+    collector would send it (live API) go through one builder and give identical features."""
+    from phishguard.services.evidence import build_url_evidence
+
+    record = _snapshot(
+        isolated_data_dir,
+        SampleRecord.create(
+            source=Source.PHISHTANK, raw_content="http://login.paypa1-secure.com/a", collected_at=T
+        ),
+        "<html><title>PayPal</title><form><input type=password></form>café</html>",
+    )
+    folder = isolated_data_dir / record.snapshot_ref
+    rdap = {"status": 200, "response": {"events": []}}
+    (isolated_data_dir / "rdap").mkdir()
+    (isolated_data_dir / "rdap" / "paypa1-secure.com.json").write_text(json.dumps(rdap))
+    ranks = {"paypal.com": 5}
+
+    stored, page_state = matrix.url_evidence(record)
+    collector_answer = {  # what the evidence collector returns for a live scan
+        "meta": json.loads((folder / "meta.json").read_text()),
+        "page": (folder / "page.html").read_bytes(),
+        "dns": json.loads((folder / "dns.json").read_text()),
+        "tls": json.loads((folder / "tls.json").read_text()),
+        "rdap": rdap,
+    }
+    live = build_url_evidence(record.raw_content, record.collected_at, **collector_answer)
+
+    assert page_state == "ok" and stored == live
+    training = backend_extractor.url_features(stored, ranks)
+    api = backend_extractor.url_features(live, ranks)
+    assert len(api) == 140
+    assert all(
+        (math.isnan(a) and math.isnan(b)) or a == b for a, b in zip(training, api, strict=True)
+    )

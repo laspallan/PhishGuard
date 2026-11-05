@@ -1,12 +1,17 @@
 """Step 10: fill the generated part of Docs/data_card.md from the pipeline's own outputs.
 
 Only the text between the GENERATED markers is replaced; everything else is hand-written.
-Every number comes from build_report.json, counts.json and the split manifest.
+Every number comes from build_report.json, counts.json, the split manifest and the feature
+matrix (missing-value rates, Phase 2).
 """
 
 import json
 from pathlib import Path
 
+import numpy as np
+import pyarrow.parquet as pq
+
+from phishguard.services.features.extractor import FEATURE_NAMES
 from phishguard_ml import paths
 
 START = "<!-- GENERATED:START (python -m phishguard_ml datacard) -->"
@@ -20,6 +25,51 @@ def _load(path: Path) -> dict | None:
 def _table(title: str, mapping: dict, key_name: str = "Key") -> str:
     lines = [f"**{title}**", "", f"| {key_name} | Count |", "|---|---|"]
     lines += [f"| {k} | {v:,} |" for k, v in mapping.items()]
+    return "\n".join(lines) + "\n"
+
+
+URL_FEATURES = FEATURE_NAMES[:95]  # F1-F95; F96-F140 are email features
+
+
+def missing_rates() -> dict[str, dict[str, float]] | None:
+    """Share of missing (NaN) values per feature, in its own modality, per class, over the
+    split dataset (all 122k samples; descriptive only, no model is involved)."""
+    features = paths.processed_dir() / "features.parquet"
+    dataset = paths.splits_dir() / "dataset.parquet"
+    if not (features.exists() and dataset.exists()):
+        return None
+    meta = pq.read_table(dataset, columns=["sample_id", "sample_type", "label"]).to_pydict()
+    kind = {
+        sid: f"{t}:{lab}"
+        for sid, t, lab in zip(meta["sample_id"], meta["sample_type"], meta["label"], strict=True)
+    }
+    table = pq.read_table(features)
+    ids = table.column("sample_id").to_pylist()
+    rows = {k: np.array([kind.get(s) == k for s in ids]) for k in set(kind.values())}
+    rates: dict[str, dict[str, float]] = {}
+    for name in FEATURE_NAMES:
+        values = np.asarray(table.column(name).to_numpy(), dtype=float)
+        modality = "url" if name in URL_FEATURES else "email"
+        rates[name] = {
+            k: float(np.isnan(values[mask]).mean())
+            for k, mask in sorted(rows.items())
+            if k.startswith(modality) and mask.any()
+        }
+    return rates
+
+
+def _missing_table(rates: dict[str, dict[str, float]]) -> str:
+    cols = ["url:phishing", "url:legitimate", "email:phishing", "email:legitimate"]
+    lines = [
+        "**Missing values per feature (share of NaN in its own modality, per class; split "
+        "dataset)**",
+        "",
+        "| Feature | " + " | ".join(cols) + " |",
+        "|---|" + "---|" * len(cols),
+    ]
+    for name, by_kind in rates.items():
+        cells = [f"{by_kind[c]:.1%}" if c in by_kind else "" for c in cols]
+        lines.append(f"| {name} | " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
 
@@ -64,6 +114,9 @@ def render() -> str:
         )
     else:
         parts.append("**Split:** not made yet.\n")
+    rates = missing_rates()
+    if rates:
+        parts.append(_missing_table(rates))
     return "\n".join(parts)
 
 

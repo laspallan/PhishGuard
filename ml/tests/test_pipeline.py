@@ -6,7 +6,7 @@ import pytest
 
 from phishguard_ml import __main__ as cli
 from phishguard_ml.data import collect, datacard, download, pipeline
-from phishguard_ml.data.records import Source, read_records
+from phishguard_ml.data.records import SampleRecord, Source, read_records
 from tests.fixtures import email_bytes, mbox, phishtank_csv, tranco_zip, write_download
 
 
@@ -175,3 +175,35 @@ def test_status_reports_snapshot_and_rdap_progress(isolated_data_dir):
         + report["rdap"]["to_retry"]
         + report["rdap"]["not_queried_yet"]
     )
+
+
+def test_datacard_reports_missing_rates_per_class_in_own_modality(isolated_data_dir):
+    import math
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from phishguard.services.features.extractor import FEATURE_NAMES
+    from phishguard_ml.data.records import write_records
+
+    records = [
+        SampleRecord.create(source=Source.PHISHTANK, raw_content=f"http://p{i}.bad-x.com/",
+                            collected_at="2026-11-05T00:00Z", group_key=f"g{i}")
+        for i in range(2)
+    ] + [
+        SampleRecord.create(source=Source.TRANCO, raw_content="https://good-x.com/",
+                            collected_at="2026-11-05T00:00Z", group_key="t")
+    ]  # fmt: skip
+    write_records(records, isolated_data_dir / "splits" / "dataset.parquet")
+    first = FEATURE_NAMES[0]
+    columns = {"sample_id": [str(r.sample_id) for r in records]}
+    columns |= {n: [1.0, 1.0, 1.0] for n in FEATURE_NAMES}
+    columns[first] = [math.nan, 1.0, math.nan]  # half of phishing, all legitimate missing
+    (isolated_data_dir / "processed").mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.table(columns), isolated_data_dir / "processed" / "features.parquet")
+
+    rates = datacard.missing_rates()
+
+    assert rates[first] == {"url:legitimate": 1.0, "url:phishing": 0.5}
+    assert rates[FEATURE_NAMES[-1]] == {}  # email feature: no email rows here
+    assert f"| {first} | 50.0% | 100.0% |" in datacard.render()
