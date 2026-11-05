@@ -29,6 +29,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import urljoin, urlsplit
 
 import dns.resolver
+import httpcore
 import httpx
 from cryptography import x509
 
@@ -89,17 +90,82 @@ def resolve(host: str) -> list[str]:
         return []
 
 
+def safe_addresses(host: str, resolver: Callable[[str], list[str]] | None = None) -> list[str]:
+    """Resolve the host once; return its addresses only if every one of them is public."""
+    addresses = (resolver or resolve)(host)
+    if not addresses:
+        raise UnsafeTargetError(f"host does not resolve: {host}")
+    for address in addresses:
+        ip = ipaddress.ip_address(address.split("%")[0])
+        if not ip.is_global:
+            raise UnsafeTargetError(f"{host} resolves to non-public address {ip}")
+    return addresses
+
+
 def check_safe_target(url: str, resolver: Callable[[str], list[str]] | None = None) -> None:
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https") or not parts.hostname:
         raise UnsafeTargetError(f"not an http(s) URL: {url}")
-    addresses = (resolver or resolve)(parts.hostname)
-    if not addresses:
-        raise UnsafeTargetError(f"host does not resolve: {parts.hostname}")
-    for address in addresses:
-        ip = ipaddress.ip_address(address.split("%")[0])
-        if not ip.is_global:
-            raise UnsafeTargetError(f"{parts.hostname} resolves to non-public address {ip}")
+    safe_addresses(parts.hostname, resolver)
+
+
+class PinnedBackend(httpcore.NetworkBackend):
+    """Connects only to an address it has just checked (decision D11f: no DNS rebinding).
+
+    check_safe_target alone is not enough: the HTTP library would resolve the host again when
+    it connects, and a hostile name server can answer a public address the first time and a
+    private one the second. Here the lookup, the check and the connection use the same
+    addresses. TLS still uses the host name (httpcore passes it for SNI and certificate checks).
+    """
+
+    def __init__(
+        self,
+        resolver: Callable[[str], list[str]] | None = None,
+        inner: httpcore.NetworkBackend | None = None,
+    ) -> None:
+        self.resolver = resolver
+        self.inner = inner or httpcore.SyncBackend()
+
+    def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+        last_error: Exception | None = None
+        for address in safe_addresses(host, self.resolver):
+            try:
+                return self.inner.connect_tcp(address, port, timeout, local_address, socket_options)
+            except httpcore.ConnectError as error:
+                last_error = error
+        raise last_error  # type: ignore[misc]  # safe_addresses never returns an empty list
+
+    def connect_unix_socket(self, path, timeout=None, socket_options=None):
+        raise UnsafeTargetError("unix sockets are never used by the collector")
+
+    def sleep(self, seconds: float) -> None:
+        self.inner.sleep(seconds)
+
+
+class PinnedTransport(httpx.HTTPTransport):
+    """httpx transport whose connections go through PinnedBackend.
+
+    httpx does not take a network backend directly, so the connection pool is rebuilt with
+    httpcore's public constructor; test_pinned_transport_connects_to_the_checked_ip checks the
+    wiring, so an httpx upgrade that changes it fails the tests instead of silently unpinning.
+    """
+
+    def __init__(
+        self,
+        resolver: Callable[[str], list[str]] | None = None,
+        inner: httpcore.NetworkBackend | None = None,
+    ) -> None:
+        super().__init__()
+        self._pool = httpcore.ConnectionPool(
+            ssl_context=httpx.create_ssl_context(),
+            network_backend=PinnedBackend(resolver, inner),
+        )
+
+
+def pinned_client(**kwargs) -> httpx.Client:
+    """The collector's HTTP client. trust_env=False: no proxy from the environment can bypass
+    the pinned transport."""
+    return httpx.Client(transport=PinnedTransport(), trust_env=False, **kwargs)
 
 
 def fetch_page(
@@ -139,6 +205,10 @@ def fetch_page(
                         break
                 meta["bytes"] = min(len(body), MAX_BYTES)
                 return meta, bytes(body[:MAX_BYTES])
+        except UnsafeTargetError as error:  # the host changed its answer since the check above
+            meta["skipped"] = str(error)
+            meta["unsafe_host"] = hop == 0
+            return meta, None
         # httpx.InvalidURL is not an HTTPError; ValueError comes from urljoin on a broken
         # Location header (e.g. "Invalid IPv6 URL"). Both seen in the first real run.
         except (httpx.HTTPError, httpx.InvalidURL, ValueError) as error:
@@ -177,22 +247,38 @@ def _cert_summary(der: bytes) -> dict:
     }
 
 
-def tls_info(host: str, port: int = 443) -> dict:
-    """Certificate details. 'verified' is True only if the chain and hostname both check out."""
+def _connect_checked(host: str, port: int, resolver: Callable[[str], list[str]] | None):
+    """A TCP connection to one of the host's checked public addresses (D11f)."""
+    last_error: OSError | None = None
+    for address in safe_addresses(host, resolver):
+        try:
+            return socket.create_connection((address, port), timeout=10)
+        except OSError as error:
+            last_error = error
+    raise last_error  # type: ignore[misc]  # safe_addresses never returns an empty list
+
+
+def tls_info(
+    host: str, port: int = 443, resolver: Callable[[str], list[str]] | None = None
+) -> dict:
+    """Certificate details. 'verified' is True only if the chain and hostname both check out.
+
+    Connects to the checked address, but sends the host name for SNI and checks the
+    certificate against it."""
     for verify in (True, False):
         context = ssl.create_default_context()
         if not verify:
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
         try:
-            with socket.create_connection((host, port), timeout=10) as sock:
+            with _connect_checked(host, port, resolver) as sock:
                 with context.wrap_socket(sock, server_hostname=host) as tls:
                     der = tls.getpeercert(binary_form=True)
             return {"verified": verify, **_cert_summary(der)}
         except ssl.SSLCertVerificationError as error:
             last_error = f"verify failed: {error.verify_message}"
             continue
-        except (OSError, ValueError) as error:
+        except (OSError, ValueError, UnsafeTargetError) as error:
             return {"error": f"{type(error).__name__}: {error}"}
     return {"error": last_error}
 
@@ -358,7 +444,7 @@ def snapshot_records(
 
     cache = RunCache()
     headers = {"User-Agent": user_agent(Source.TRANCO)}
-    with httpx.Client(timeout=TIMEOUT, headers=headers) as client:
+    with pinned_client(timeout=TIMEOUT, headers=headers) as client:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             results = pool.map(lambda r: _safe_snapshot(r, client, cache, links), todo)
             for record, (ref, found) in zip(todo, results, strict=True):

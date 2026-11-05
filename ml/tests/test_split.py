@@ -18,6 +18,7 @@ def make_records(n_phish_url=600, n_legit_url=600, n_phish_mail=200, n_legit_mai
                 source=Source.PHISHTANK,
                 raw_content=f"http://p{i}.d{i % 150}.example/login",
                 collected_at=T,
+                snapshot_ref=f"snapshots/{i}",
                 group_key=f"domain:d{i % 150}.example",
                 attack_category=CATEGORIES[i % 2],
             )
@@ -28,6 +29,7 @@ def make_records(n_phish_url=600, n_legit_url=600, n_phish_mail=200, n_legit_mai
                 source=Source.TRANCO,
                 raw_content=f"https://site{i}.example/",
                 collected_at=T,
+                snapshot_ref=f"snapshots/{i}",
                 group_key=f"domain:site{i}.example",
             )
         )
@@ -141,3 +143,75 @@ def test_records_without_group_key_cannot_be_split():
     )
     with pytest.raises(ValueError, match="group_key"):
         split.make_split([record])
+
+
+def test_urls_without_a_snapshot_are_never_sampled():
+    unfetched = [
+        SampleRecord.create(
+            source=Source.TRANCO,
+            raw_content=f"https://unfetched{i}.example/",
+            collected_at=T,
+            group_key=f"domain:unfetched{i}.example",
+        )
+        for i in range(2000)
+    ]
+    dataset = split.sample_dataset(make_records() + unfetched, n_url=800, n_email=300)
+
+    urls = [r for r in dataset if r.sample_type is Modality.URL]
+    assert len(urls) == 800 and all(r.snapshot_ref is not None for r in urls)
+    with pytest.raises(split.InsufficientDataError):
+        split.sample_dataset(make_records(n_legit_url=300) + unfetched, n_url=800, n_email=300)
+
+
+def _phish(url, i=0):
+    return SampleRecord.create(
+        source=Source.PHISHTANK,
+        raw_content=url,
+        collected_at=T,
+        group_key="domain:old",
+        snapshot_ref=f"snapshots/p{i}",
+        attack_category=AttackCategory.UNKNOWN,
+    )
+
+
+POPULAR = {"google.com", "qrco.de", "pages.dev"}
+
+
+def test_phishing_on_hosting_platforms_is_grouped_by_customer_site():
+    assert split.phishing_url_group(_phish("https://evil.pages.dev/a"), POPULAR) == (
+        "domain:evil.pages.dev"
+    )
+    assert split.phishing_url_group(_phish("http://login-bad.example/x"), POPULAR) == (
+        "domain:login-bad.example"
+    )
+
+
+def test_phishing_on_popular_sites_is_one_group_per_link_unless_it_redirects():
+    form = _phish("https://docs.google.com/forms/d/abc/viewform")
+    assert split.phishing_url_group(form, POPULAR).startswith("link:https://docs.google.com/")
+    qr = _phish("https://qrco.de/bX1")
+    # redirected to an attacker site: grouped with it, so links to one site stay together
+    assert split.phishing_url_group(qr, POPULAR, "https://a.evil-site.com/login") == (
+        "domain:evil-site.com"
+    )
+    # redirected to another popular site (e.g. a takedown page): still one group per link
+    assert split.phishing_url_group(qr, POPULAR, "https://www.google.com/").startswith("link:")
+
+
+def test_regroup_changes_only_phishing_urls():
+    records = make_records(n_phish_url=2, n_legit_url=2, n_phish_mail=1, n_legit_mail=1)
+    out = split.regroup_phishing_urls(records, POPULAR, lambda r: None)
+    for before, after in zip(records, out, strict=True):
+        changed = before.sample_type is Modality.URL and before.label is Label.PHISHING
+        assert (before.group_key != after.group_key) == changed
+
+
+def test_each_modality_is_split_on_its_own():
+    dataset = split.sample_dataset(make_records(), n_url=800, n_email=300)
+    rows = split.make_split(dataset)
+    assert [row["sample_id"] for row in rows] == [str(r.sample_id) for r in dataset]
+    for modality in Modality:
+        part = [r for r in dataset if r.sample_type is modality]
+        own = split.make_split(part)
+        by_id = {row["sample_id"]: row for row in rows}
+        assert all(by_id[row["sample_id"]] == row for row in own)

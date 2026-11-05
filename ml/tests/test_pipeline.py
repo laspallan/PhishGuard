@@ -98,7 +98,8 @@ def test_collect_keeps_only_new_samples_and_never_touches_the_split(isolated_dat
                     [
                         ("http://paypal-login.bad.example/", "2026-12-01T00:00:00+00:00", "yes"),
                         ("http://brand-new.bad.example/", "2026-12-01T00:00:00+00:00", "yes"),
-                    ]
+                    ],
+                    targets=["Other", "PayPal"],
                 ),
             ),
             (Source.OPENPHISH, b"http://other.bad.example/x.exe\n"),
@@ -123,6 +124,10 @@ def test_collect_keeps_only_new_samples_and_never_touches_the_split(isolated_dat
         "http://brand-new.bad.example/",
         "https://newsite.example/",
     ]
+    by_url = {r.raw_content: r for r in new}
+    # PhishTank's target brand is used, as in `label` (D1); Tranco samples get no category
+    assert by_url["http://brand-new.bad.example/"].attack_category.value == "brand_impersonation"
+    assert by_url["https://newsite.example/"].attack_category is None
     assert sorted(p.name for p in splits.iterdir()) == before
 
     again = collect.collect_once(client, day=date(2026, 12, 1), take_snapshots=False)

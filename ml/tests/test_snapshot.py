@@ -2,6 +2,7 @@
 
 import json
 
+import httpcore
 import httpx
 import pytest
 
@@ -353,3 +354,88 @@ def test_meta_is_written_atomically(isolated_data_dir):
 
     assert json.loads((folder / "meta.json").read_text()) == {"status": 200}
     assert not (folder / "meta.json.tmp").exists()
+
+
+# --- D11f: connections go to the address that was checked (no DNS rebinding) ---------------
+
+
+def rebinding_resolver(first: list[str], then: list[str]):
+    """A hostile name server: one answer for the safety check, another one afterwards."""
+    answers = [first]
+
+    def resolver(host):
+        return answers.pop() if answers else then
+
+    return resolver
+
+
+class RecordingBackend(httpcore.NetworkBackend):
+    """Stands in for the real socket layer: records where it was asked to connect."""
+
+    def __init__(self):
+        self.connected: list[tuple[str, int]] = []
+
+    def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+        self.connected.append((host, port))
+        raise httpcore.ConnectError("offline test")
+
+
+def test_pinned_backend_connects_to_the_checked_ip_only():
+    inner = RecordingBackend()
+    backend = snapshot.PinnedBackend(fake_resolver(PUBLIC), inner)
+    with pytest.raises(httpcore.ConnectError):
+        backend.connect_tcp("site.example", 443)
+    assert inner.connected == [("93.184.216.34", 443)]
+
+
+def test_pinned_backend_refuses_a_rebound_private_address():
+    inner = RecordingBackend()
+    backend = snapshot.PinnedBackend(rebinding_resolver(["93.184.216.34"], ["127.0.0.1"]), inner)
+    backend.resolver("site.example")  # the safety check's lookup: public
+    with pytest.raises(snapshot.UnsafeTargetError):
+        backend.connect_tcp("site.example", 80)  # the connection's lookup: loopback
+    assert inner.connected == []
+
+
+def test_pinned_transport_connects_to_the_checked_ip():
+    """Guards the httpx wiring: if an upgrade bypassed PinnedBackend, this would fail."""
+    inner = RecordingBackend()
+    transport = snapshot.PinnedTransport(fake_resolver(PUBLIC), inner)
+    with httpx.Client(transport=transport, trust_env=False) as client:
+        with pytest.raises(httpx.ConnectError):
+            client.get("http://site.example/login")
+    assert inner.connected == [("93.184.216.34", 80)]
+
+
+def test_fetch_page_refuses_rebinding_between_check_and_connect():
+    resolver = rebinding_resolver(["93.184.216.34"], ["10.0.0.5"])
+    inner = RecordingBackend()
+    client = httpx.Client(transport=snapshot.PinnedTransport(resolver, inner), trust_env=False)
+
+    meta, html = snapshot.fetch_page("http://site.example/", client, resolver)
+
+    assert html is None and inner.connected == []
+    assert "non-public address 10.0.0.5" in meta["skipped"] and meta["unsafe_host"] is True
+
+
+def test_tls_connects_to_the_checked_ip_and_refuses_private(monkeypatch):
+    connected = []
+
+    def fake_connect(address, timeout):
+        connected.append(address)
+        raise OSError("offline test")
+
+    monkeypatch.setattr(snapshot.socket, "create_connection", fake_connect)
+    assert "OSError" in snapshot.tls_info("site.example", resolver=fake_resolver(PUBLIC))["error"]
+    assert connected == [("93.184.216.34", 443)]
+
+    connected.clear()
+    lan = fake_resolver({"lan.example": ["192.168.1.1"]})
+    assert "UnsafeTargetError" in snapshot.tls_info("lan.example", resolver=lan)["error"]
+    assert connected == []
+
+
+def test_collector_client_ignores_proxy_settings_and_is_pinned():
+    with snapshot.pinned_client() as client:
+        assert client.trust_env is False
+        assert isinstance(client._transport, snapshot.PinnedTransport)

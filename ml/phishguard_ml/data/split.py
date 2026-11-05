@@ -2,6 +2,8 @@
 
 - Each modality is 50% phishing / 50% legitimate. Phishing samples are drawn per attack
   category in proportion to what is available (stratified sampling, proposal Section 3.4).
+- Only URL records with a snapshot are eligible (decided 2026-11-05), so both classes have the
+  same kind of page / DNS / TLS evidence.
 - 15% locked test set, 85% development set with 5 stratified group folds. Groups (registered
   domain / sender / Enron mailbox) never cross a boundary.
 - The split is written to data/splits/ with SHA-256 hashes in manifest.json and is never
@@ -11,7 +13,9 @@
 import hashlib
 import json
 from collections import Counter, defaultdict
+from collections.abc import Callable, Set
 from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 import numpy as np
 import pyarrow as pa
@@ -20,6 +24,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 
 from phishguard.models.enums import Label, Modality
 from phishguard_ml import paths
+from phishguard_ml.data import clean
 from phishguard_ml.data.records import SampleRecord, Source, read_records, write_records
 
 SEED = 42
@@ -64,6 +69,10 @@ def sample_dataset(
     for r in sorted(records, key=lambda r: str(r.sample_id)):  # order-independent
         if r.source in EXCLUDED_SOURCES:
             continue
+        if r.sample_type is Modality.URL and r.snapshot_ref is None:
+            # Every phishing URL has a snapshot, but most Tranco URLs were never fetched; if
+            # they were sampled, "no page / DNS / TLS evidence" would mean "legitimate" (leak).
+            continue
         category = r.attack_category.value if r.attack_category else "none"
         pools[(r.sample_type, r.label, category)].append(r)
 
@@ -86,17 +95,71 @@ def sample_dataset(
     return chosen
 
 
+def phishing_url_group(
+    record: SampleRecord, popular: Set[str], final_url: str | None = None
+) -> str:
+    """Group key of a phishing URL: the site owner, not the platform (decided 2026-11-05).
+
+    1. Hosting platforms (PSL private section): the customer site, e.g. evil.web.app.
+    2. On a popular site (Tranco-listed owner: google.com, bit.ly, qrco.de, ...) the attacker
+       owns only the link, so each link is its own group, unless it redirected to a site
+       that is not popular: then it is grouped with that landing site, so two links to the
+       same phishing site cannot end up on both sides of the split.
+    """
+    url = clean.normalise_url(record.raw_content) or record.raw_content
+    owner = clean.owner_domain(urlsplit(url).hostname or "")
+    if owner not in popular:
+        return f"domain:{owner}"
+    landing = urlsplit(final_url or "").hostname
+    if landing:
+        landing_owner = clean.owner_domain(landing)
+        if landing_owner != owner and landing_owner not in popular:
+            return f"domain:{landing_owner}"
+    return f"link:{url}"
+
+
+def regroup_phishing_urls(
+    records: list[SampleRecord],
+    popular: Set[str],
+    final_url_of: Callable[[SampleRecord], str | None],
+) -> list[SampleRecord]:
+    """Phishing URL records get phishing_url_group keys; every other record is unchanged
+    (legitimate Tranco URLs keep their site's group, shared with its D10a link page)."""
+    out = []
+    for r in records:
+        if r.sample_type is Modality.URL and r.label is Label.PHISHING:
+            r = r.model_copy(update={"group_key": phishing_url_group(r, popular, final_url_of(r))})
+        out.append(r)
+    return out
+
+
 def _stratum(r: SampleRecord) -> str:
     category = r.attack_category.value if r.attack_category else "none"
     return f"{r.sample_type.value}|{r.label.value}|{category}"
 
 
 def make_split(dataset: list[SampleRecord], *, seed: int = SEED) -> list[dict]:
-    """Rows of {sample_id, set ('test'|'dev'), fold (0-4, or None for test)}."""
+    """Rows of {sample_id, set ('test'|'dev'), fold (0-4, or None for test)}, in dataset order.
+
+    Each modality is split on its own (separate URL and email models, D5), so the group
+    structure of one cannot unbalance the other's strata."""
+    rows: dict[str, dict] = {}
+    for modality in Modality:
+        part = [r for r in dataset if r.sample_type is modality]
+        if part:
+            rows.update((row["sample_id"], row) for row in _split_part(part, seed))
+    return [rows[str(r.sample_id)] for r in dataset]
+
+
+def _split_part(dataset: list[SampleRecord], seed: int) -> list[dict]:
     strata = np.array([_stratum(r) for r in dataset])
-    groups = np.array([r.group_key for r in dataset])
-    if any(g is None for g in groups):
+    keys = [r.group_key for r in dataset]
+    if any(k is None for k in keys):
         raise ValueError("every record needs a group_key before splitting")
+    # Integer ids in sorted key order: the same result as passing the strings (sklearn sorts
+    # the groups too), without a huge numpy string array for long "link:" keys.
+    group_id = {key: i for i, key in enumerate(sorted(set(keys)))}
+    groups = np.array([group_id[k] for k in keys])
     index = np.arange(len(dataset))
 
     outer = StratifiedGroupKFold(n_splits=20, shuffle=True, random_state=seed)

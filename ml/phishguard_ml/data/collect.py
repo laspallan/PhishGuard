@@ -55,8 +55,12 @@ def collect_once(
     sources = list(DAILY_SOURCES) + ([Source.TRANCO] if _tranco_due(day) else [])
     rejects = parse.RejectCounter()
     found: list[SampleRecord] = []
+    targets: dict[str, str] = {}
     for source in sources:
         folder = download_source(source, client=client, day=day)
+        if source is Source.PHISHTANK:
+            # same D1 brand rule as `label` on the training data, so categories are comparable
+            targets = parse.phishtank_targets([folder])
         if source is Source.TRANCO:
             found.extend(parse.parse_tranco(folder, rejects, limit=tranco_limit))
         else:
@@ -70,7 +74,7 @@ def collect_once(
     for record in fresh:
         page = load_snapshot(record, "page.html")
         html = page.decode("utf-8", errors="replace") if page else None
-        labelled.append(label.label_record(record, html))
+        labelled.append(label.label_record(record, html, targets))
 
     out = monthly_dir() / day.isoformat()[:7] / f"{day.isoformat()}.parquet"
     if labelled:

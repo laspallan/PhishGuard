@@ -77,7 +77,8 @@ def test_load_development_keeps_dev_rows_of_one_modality(isolated_data_dir):
         group_key="domain:a-test.com",
     )  # fmt: skip
     dataset = [*emails, url]
-    rows = split.make_split(dataset)
+    # the URL is a dev row of the other modality (one sample cannot be split on its own)
+    rows = [*split.make_split(emails), {"sample_id": str(url.sample_id), "set": "dev", "fold": 0}]
     split.write_split(dataset, rows, {})
     _write_matrix(dataset, feature_code_hash())
 

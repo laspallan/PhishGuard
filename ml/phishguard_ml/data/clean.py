@@ -50,6 +50,17 @@ def registered_domain(host: str) -> str:
     return result.top_domain_under_public_suffix or host.lower()
 
 
+_extract_private = tldextract.TLDExtract(suffix_list_urls=(), include_psl_private_domains=True)
+
+
+def owner_domain(host: str) -> str:
+    """Like registered_domain, but hosting platforms in the Public Suffix List's private section
+    (web.app, pages.dev, github.io, ...) count as suffixes, so each customer site is its own
+    owner (e.g. evil.web.app instead of web.app)."""
+    result = _extract_private(host)
+    return result.top_domain_under_public_suffix or host.lower()
+
+
 def url_group_key(normalised_url: str) -> str:
     return "domain:" + registered_domain(urlsplit(normalised_url).hostname or "")
 

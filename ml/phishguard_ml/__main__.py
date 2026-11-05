@@ -28,12 +28,25 @@ from phishguard.models.enums import Label
 from phishguard_ml.data import collect, datacard, pipeline, rdap, split
 from phishguard_ml.data.download import download_source, make_client
 from phishguard_ml.data.records import Source, read_records, write_records
-from phishguard_ml.data.snapshot import NotInSnapshotContainerError, snapshot_records
+from phishguard_ml.data.snapshot import (
+    NotInSnapshotContainerError,
+    load_snapshot,
+    snapshot_records,
+)
 from phishguard_ml.features import matrix
 
 
 def _print(obj) -> None:
     print(json.dumps(obj, indent=2, default=str))
+
+
+def _final_url(record) -> str | None:
+    """Where the snapshot's redirects ended (None if no snapshot or no answer)."""
+    meta = load_snapshot(record, "meta.json")
+    try:
+        return json.loads(meta).get("final_url") if meta else None
+    except ValueError:
+        return None
 
 
 def _train(args) -> list[dict]:
@@ -147,7 +160,9 @@ def _run(args) -> int:
     elif args.command == "count":
         _print(pipeline.count())
     elif args.command == "split":
-        records = read_records(pipeline.labelled_path())
+        records = split.regroup_phishing_urls(
+            read_records(pipeline.labelled_path()), set(matrix.load_tranco_ranks()), _final_url
+        )
         dataset = split.sample_dataset(records, n_url=args.n_url, n_email=args.n_email)
         rows = split.make_split(dataset)
         _print(split.write_split(dataset, rows, {"n_url": args.n_url, "n_email": args.n_email}))
