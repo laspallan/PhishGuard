@@ -581,3 +581,20 @@ Removed because they duplicated existing definitions or held no logic (only inve
 extension content script that only logged to the console (it also ran on every page). The real
 work is planned in Phases 3 (DistilBERT), 4 (RQ2), 5 (persisting scans, Celery tasks) and
 6 (simulation, RQ3).
+
+## 2026-11-05 — D11: live URL scanning (you agreed, all as recommended)
+
+Design in `Docs/live_url_scanning.md`. D11a evidence collector as its own isolated Celery worker
+container reached through Redis; D11b two stages (no target contact first, page and TLS only when
+uncertain and safe to fetch); D11c deployed URL models without RDAP (F46–F52) and Tranco
+(F57–F58), both kept in the RQ1 evaluation; D11d URLs with secret-looking query parameters are
+never fetched, verdict at most warn; D11e an uncertain partial answer becomes warn; D11f connect
+to the checked IP (DNS-rebinding fix), in the batch collector too, before any live use.
+
+**Viva explanation:** the safety rule allows only the collector container to fetch phishing pages,
+so the API asks the collector instead of fetching. Training/serving skew decides the deployed
+features: live RDAP fails often under registry rate limits (missing for reasons unseen in
+training) and Tranco membership separates the classes by construction. Fetching only when needed
+cuts contacts with phishing hosts and avoids repeating GETs that can have side effects (one-time
+links). Checking an address and then letting the HTTP library resolve again leaves a
+server-side request forgery gap (DNS rebinding); pinning the checked IP closes it.

@@ -1,6 +1,6 @@
 # Phase 5 design proposal: live URL scanning
 
-**Status:** proposal, 2026-11-05 — nothing is built until the decisions in section 8 are agreed.
+**Status:** agreed 2026-11-05 — D11a–D11f accepted as recommended (section 8). Build order in section 9.
 
 ## 1. The problem
 

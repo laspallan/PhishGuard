@@ -246,8 +246,8 @@ answer 503 until a trained model is wired in (no placeholder verdicts); model re
 real feature-parity check (`feature_code_hash`); Celery app skeleton.
 
 **Still open in Phase 5:** live scoring with registered models (needs Phase 3 training),
-collecting live URL evidence for F46–F95 without breaking the snapshot-only fetch rule
-(design needed), saving scans to the database, Celery tasks, latency measurement.
+collecting live URL evidence (design agreed 2026-11-05, D11, `Docs/live_url_scanning.md`;
+first step: pinned-IP fetching), saving scans to the database, Celery tasks, latency measurement.
 
 **Removed 2026-11-04 (you decided):** the duplicate / placeholder files from bf4574d —
 `simulation/gophish.py`, `gophish_client.py`, `templates.py`, `events.py` (duplicated
