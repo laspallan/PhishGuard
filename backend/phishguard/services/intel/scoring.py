@@ -1,33 +1,69 @@
-"""Combine VT and OTX into ti_score (0-100)."""
+"""ti_score (0-100) from one VirusTotal and one OTX answer (agreed 2026-11-08, decisions.md RQ2).
 
-from __future__ import annotations
+- VirusTotal: 100 * min(1, (malicious + 0.5 * suspicious) / 5), counted per engine from
+  `last_analysis_results` without the feeds our phishing URLs come from (FEED_ENGINES). Only if an
+  answer has no per-engine results are the totals in `last_analysis_stats` used.
+- OTX: 100 * min(1, pulse_count / 5), from `pulse_info.count`.
+- ti_score = the higher of the two. "Not found" counts as 0; an error or an unreadable answer leaves
+  that provider out; with both left out, ti_score is None (missing, like any other feature).
+
+Fixed before any real answer was seen; the scale was not tuned.
+"""
 
 from typing import Any
 
+FULL_SCORE_AT = 5  # engines or pulses for a full score
+# PhishTank and OpenPhish are the sources of the phishing URLs, so their verdicts would repeat the
+# label. Compared in lower case with the engine name and its key in last_analysis_results.
+FEED_ENGINES = frozenset({"phishtank", "openphish"})
 
-def compute_ti_score(vt_resp: dict[str, Any] | None, otx_resp: dict[str, Any] | None) -> float:
-    score = 0.0
-    # VT: look for malicious/suspicious counts
-    if vt_resp and isinstance(vt_resp, dict):
-        data = vt_resp.get("data") or {}
-        attrs = data.get("attributes") or {}
-        stats = attrs.get("last_analysis_stats") or {}
-        malicious = stats.get("malicious") or 0
-        suspicious = stats.get("suspicious") or 0
-        # Scale conservatively
-        score += min(60.0, malicious * 10.0 + suspicious * 3.0)
-    # OTX
-    if otx_resp and isinstance(otx_resp, dict):
-        if otx_resp.get("error"):
-            pass
-        else:
-            # pulse info can indicate maliciousness
-            pulse_info = otx_resp.get("pulse_info") or {}
-            count = pulse_info.get("count") or 0
-            score += min(40.0, count * 4.0)
-    # Clamp
-    if score < 0:
-        score = 0.0
-    if score > 100:
-        score = 100.0
-    return round(score, 2)
+
+def _scaled(count: float) -> float:
+    return 100.0 * min(1.0, count / FULL_SCORE_AT)
+
+
+def _number(value: Any) -> float | None:
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
+def vt_component(response: dict[str, Any] | None) -> float | None:
+    if not isinstance(response, dict) or "error" in response:
+        return None
+    if response.get("status") == "not_found":
+        return 0.0
+    attributes = (response.get("data") or {}).get("attributes") or {}
+    results = attributes.get("last_analysis_results")
+    if isinstance(results, dict) and results:
+        malicious = suspicious = 0
+        for key, entry in results.items():
+            if not isinstance(entry, dict):
+                continue
+            names = {str(key).lower(), str(entry.get("engine_name", "")).lower()}
+            if names & FEED_ENGINES:
+                continue
+            malicious += entry.get("category") == "malicious"
+            suspicious += entry.get("category") == "suspicious"
+        return _scaled(malicious + 0.5 * suspicious)
+    stats = attributes.get("last_analysis_stats")
+    if not isinstance(stats, dict):
+        return None
+    malicious, suspicious = _number(stats.get("malicious")), _number(stats.get("suspicious"))
+    if malicious is None and suspicious is None:
+        return None
+    return _scaled((malicious or 0.0) + 0.5 * (suspicious or 0.0))
+
+
+def otx_component(response: dict[str, Any] | None) -> float | None:
+    if not isinstance(response, dict) or "error" in response:
+        return None
+    if response.get("status") == "not_found":
+        return 0.0
+    count = _number((response.get("pulse_info") or {}).get("count"))
+    return None if count is None else _scaled(count)
+
+
+def compute_ti_score(
+    vt_resp: dict[str, Any] | None, otx_resp: dict[str, Any] | None
+) -> float | None:
+    parts = [p for p in (vt_component(vt_resp), otx_component(otx_resp)) if p is not None]
+    return round(max(parts), 2) if parts else None

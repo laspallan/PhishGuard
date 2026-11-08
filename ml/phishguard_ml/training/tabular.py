@@ -131,6 +131,25 @@ def run_dir(modality: str, feature_set: str, model: str) -> Path:
     return paths.models_dir() / modality / feature_set / model
 
 
+def run_is_complete(
+    modality: str, feature_set: str, model: str, *, n_trials: int, split_sha256: dict
+) -> bool:
+    """True if this model was fully trained (shap.json is written last) with the same feature
+    code, split, trial count and seed, so `train --resume` can skip it after an interruption."""
+    folder = run_dir(modality, feature_set, model)
+    try:
+        run = json.loads((folder / "run.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return (
+        (folder / "shap.json").exists()
+        and run.get("feature_code_hash") == feature_code_hash()
+        and run.get("split_sha256") == split_sha256
+        and run.get("n_trials") == n_trials
+        and run.get("seed") == SEED
+    )
+
+
 def save_run(info: RunInfo, data: DevData, oof: np.ndarray) -> Path:
     folder = run_dir(info.modality, info.feature_set, info.model)
     folder.mkdir(parents=True, exist_ok=True)

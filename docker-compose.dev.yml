@@ -1,0 +1,7 @@
+# Only for running the API or a worker on the host during development:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis
+# Publishes Redis on 127.0.0.1 only. The normal setup (docker-compose.yml alone) does not publish it.
+services:
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"

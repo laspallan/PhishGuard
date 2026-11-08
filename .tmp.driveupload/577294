@@ -1,0 +1,26 @@
+{
+ "A": {
+  "records": [
+   "217.114.94.2"
+  ],
+  "ttl": 55
+ },
+ "AAAA": {
+  "error": "NoAnswer"
+ },
+ "MX": {
+  "records": [
+   "10 bentley-com.mail.protection.outlook.com."
+  ],
+  "ttl": 3600
+ },
+ "NS": {
+  "records": [
+   "ns1-07.azure-dns.com.",
+   "ns2-07.azure-dns.net.",
+   "ns3-07.azure-dns.org.",
+   "ns4-07.azure-dns.info."
+  ],
+  "ttl": 300
+ }
+}

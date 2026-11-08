@@ -61,7 +61,7 @@ password-reset confirmations), and (c) be slow. Proposed:
 
 | Stage | Features | Contacts | When |
 |---|---|---|---|
-| 1 | F1–F45, F53–F56 (DNS), F46–F52 (RDAP, cached) | resolvers, registries — **not** the target host | every scan |
+| 1 | F1–F45, F53–F56 (DNS); no RDAP, see D11c | resolvers — **not** the target host | every scan |
 | 2 | + F59–F64 (TLS), F66–F95 (page) | the target host, via the collector | only if stage 1 is uncertain **and** the URL is safe to fetch |
 
 - Two models per deployment: **M1** trained on the stage-1 feature set, **M2** on the full live
@@ -84,9 +84,12 @@ password-reset confirmations), and (c) be slow. Proposed:
 - **Tranco (F57–F58):** they separate the training classes by construction (every legitimate
   URL came from Tranco). Live, a legitimate site outside the Tranco top list would look
   suspicious. Proposal: the deployed models also leave out F57–F58.
-- So: **M2 = F1–F95 without F46–F52, F57–F58** (and F65, always missing);
-  **M1 = F1–F45 + F53–F56**. Two new feature sets in `training/devdata.py` (`live`,
-  `live_stage1`), reported next to the RQ1 results.
+- **F55 `num_name_servers` (found while building the sets, 2026-11-06):** it falls back to the RDAP
+  name servers when DNS gives none, so without RDAP the same URL could get another value live
+  than in training. It follows D11c and stays out of both deployed models too.
+- So: **M2 = F1–F95 without F46–F52, F55, F57–F58 and F65** (84 features; F65 is always missing);
+  **M1 = F1–F45 + F53, F54, F56** (48 features). Two feature sets in `training/devdata.py`
+  (`live`, `live_stage1`), reported next to the RQ1 results.
 
 ## 5. Safety changes needed before live use
 
@@ -110,8 +113,10 @@ password-reset confirmations), and (c) be slow. Proposed:
 - If evidence is late or fails, the API answers with what it has, using M1, and marks the
   result `evidence: "partial"`. Proposed policy: a partial answer can be **block** (if M1 alone
   is confident) or **warn**, but an uncertain partial answer becomes **warn**, not allow.
-- Caches: evidence per URL 1 h, DNS per host 1 h, RDAP per registered domain 7 days (if RDAP
-  is kept for M1), verdict per URL 1 h. All in Redis.
+- Cache as built (2026-11-06): verdict per URL in Redis, 1 h, or 5 min for a partial answer. It
+  replaces the per-URL evidence cache: a repeated scan does not contact the target at all. There
+  is no per-host DNS cache, because the stage 1 lookup goes to a resolver, not to the target. RDAP
+  is not used (D11c). Keys are hashes of the URL, so Redis holds no URLs.
 - Latency is measured per stage and reported (Phase 5 acceptance check).
 
 ## 7. Tests (acceptance checks for this part)

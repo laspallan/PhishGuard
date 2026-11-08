@@ -5,16 +5,32 @@
   "description": "Real-time phishing detection",
   "permissions": [
     "tabs",
-    "storage"
+    "storage",
+    "favicon",
+    "alarms",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",
+    "scripts": ["background.js"],
     "type": "module"
   },
   "action": {
     "default_popup": "popup.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["blocked.html", "checking.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "phishguard@msc-thesis.invalid",
+      "strict_min_version": "121.0"
+    }
   }
 }

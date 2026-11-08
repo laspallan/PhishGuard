@@ -36,6 +36,16 @@ train = [
     "optuna>=5.0",
     "shap>=0.51",
 ]
+# D6: decoding brand favicons for the extension's reference hashes (Pillow 13.0.0, MIT-CMU,
+# checked 2026-11-08). Only `brand-icons` needs it.
+brand = [
+    "pillow>=13.0",
+]
+# LSTM and CNN, installed in ml/.venv-text with the CPU build of PyTorch (see README).
+text = [
+    "torch>=2.15",
+    "transformers>=5.22",  # DistilBERT prediction here; training runs on Colab
+]
 
 [tool.setuptools.packages.find]
 include = ["phishguard_ml*"]

@@ -31,8 +31,10 @@ URL categories must be recomputed after snapshotting.
 - **Email age gap** (proposal §3.6.1): legitimate emails are from 2001–2003, most phishing
   emails from 2005–2025. Handled by `email_normalise.py`, the no-F96–F101/F109/F110 check and
   the recent own-mailbox check set.
-- **Tranco URLs are home pages only** (`https://<domain>/`), while phishing URLs usually have
-  paths and queries. A model can separate the classes by URL shape alone. See decision D10.
+- **Legitimate URLs are home pages, plus one deeper page per site.** Tranco gives domains, so each
+  site contributes `https://<domain>/` and one same-site page chosen from its links (decision
+  D10a). Phishing URLs usually have longer paths and queries, so URL shape can still separate the
+  classes; URL results are also reported without path features (D10c).
 - **PhishTank only lists phishes that are still online.** Its `submission_time` nevertheless
   spans 2011–2026 (most 2023–2026), see the statistics below and decision D9.
 - **Registration data (RDAP)** comes from each registry's own RDAP server (`data/rdap/`), not
@@ -46,7 +48,7 @@ URL categories must be recomputed after snapshotting.
 
 <!-- GENERATED:START (python -m phishguard_ml datacard) -->
 
-Built 2026-11-02T03:06:54.195919+00:00 with settings `{"tranco_limit": 100000, "enron_fraction": 0.1}`; downloads used: `{"phishtank": "2026-11-02", "openphish": "2026-11-02", "tranco": "2026-11-02", "nazario": "2026-11-02", "spamassassin": "2026-11-02", "enron": null}`.
+Built 2026-11-02T05:35:35.925179+00:00 with settings `{"tranco_limit": 100000, "enron_fraction": 0.1}`; downloads used: `{"phishtank": "2026-11-02", "openphish": "2026-11-02", "tranco": "2026-11-02", "nazario": "2026-11-02", "spamassassin": "2026-11-02", "enron": "2026-11-02"}`.
 
 **Parsed per source (before de-duplication)**
 
@@ -57,7 +59,7 @@ Built 2026-11-02T03:06:54.195919+00:00 with settings `{"tranco_limit": 100000, "
 | tranco | 100,000 |
 | nazario | 11,965 |
 | spamassassin | 4,150 |
-| enron | 0 |
+| enron | 20,346 |
 
 **Rejected entries**
 
@@ -65,22 +67,23 @@ Built 2026-11-02T03:06:54.195919+00:00 with settings `{"tranco_limit": 100000, "
 |---|---|
 | phishtank:bad_url | 7 |
 | nazario:empty_email | 45 |
+| enron:skipped_folder | 312,770 |
 
 **De-duplication**
 
 | Item | Count |
 |---|---|
-| kept | 165,123 |
-| duplicates | 2,748 |
+| kept | 183,931 |
+| duplicates | 4,286 |
 | label_conflicts | 6 |
 
 **Records by type and label**
 
 | Type:label | Count |
 |---|---|
-| email:legitimate | 4,108 |
+| email:legitimate | 22,916 |
 | email:phishing | 9,429 |
-| url:legitimate | 99,994 |
+| url:legitimate | 117,586 |
 | url:phishing | 51,592 |
 
 **Phishing records by attack category (D1 rules)**
@@ -92,24 +95,35 @@ Built 2026-11-02T03:06:54.195919+00:00 with settings `{"tranco_limit": 100000, "
 | email:malware | 62 |
 | email:spear | 649 |
 | email:unknown | 3,287 |
-| url:brand_impersonation | 840 |
+| url:brand_impersonation | 6,673 |
+| url:credential_harvest | 2,734 |
 | url:malware | 18 |
-| url:unknown | 50,734 |
+| url:unknown | 42,167 |
 
 **Records by source**
 
 | Source | Count |
 |---|---|
+| enron | 18,808 |
 | nazario | 9,429 |
 | openphish | 298 |
 | phishtank | 51,294 |
 | spamassassin | 4,108 |
-| tranco | 99,994 |
+| tranco | 117,586 |
 
 **Source dates by year**
 
 | Source:year | Count |
 |---|---|
+| enron:1979 | 8 |
+| enron:1997 | 10 |
+| enron:1998 | 1 |
+| enron:1999 | 196 |
+| enron:2000 | 3,975 |
+| enron:2001 | 12,034 |
+| enron:2002 | 2,577 |
+| enron:2004 | 6 |
+| enron:2044 | 1 |
 | nazario:1970 | 2 |
 | nazario:1999 | 1 |
 | nazario:2000 | 3 |
@@ -157,8 +171,155 @@ Built 2026-11-02T03:06:54.195919+00:00 with settings `{"tranco_limit": 100000, "
 | spamassassin:2002 | 4,107 |
 | spamassassin:2028 | 1 |
 
-URL snapshot coverage: 0.0%. Largest balanced set possible: `{"url": 103184, "email": 8216}`.
+URL snapshot coverage: 62.5%. Largest balanced set possible: `{"url": 103184, "email": 18858}`.
 
-**Split:** not made yet.
+**Split** (seed 42, created 2026-11-05T04:54:19.602186+00:00): 122,042 samples, locked test 18,271, dev folds `{"0": 20754, "1": 20755, "2": 20754, "3": 20754, "4": 20754}`.
+
+Hashes: `{"dataset.parquet": "3c230fcacb4e15e5c8e62d4672c0b03513220697103ecd6e29a4f84db94d23e0", "split.parquet": "d3367804dd0bdc3da7e50582d74f1da87e6db5cc538ddf4f60362f051dfd9490"}`
+
+**Missing values per feature (share of NaN in its own modality, per class; split dataset)**
+
+| Feature | url:phishing | url:legitimate | email:phishing | email:legitimate |
+|---|---|---|---|---|
+| url_length | 0.0% | 0.0% |  |  |
+| hostname_length | 0.0% | 0.0% |  |  |
+| path_length | 0.0% | 0.0% |  |  |
+| query_length | 0.0% | 0.0% |  |  |
+| fragment_length | 0.0% | 0.0% |  |  |
+| num_dots | 0.0% | 0.0% |  |  |
+| num_hyphens | 0.0% | 0.0% |  |  |
+| num_underscores | 0.0% | 0.0% |  |  |
+| num_slashes | 0.0% | 0.0% |  |  |
+| num_question_marks | 0.0% | 0.0% |  |  |
+| num_equals | 0.0% | 0.0% |  |  |
+| num_at_symbols | 0.0% | 0.0% |  |  |
+| num_ampersands | 0.0% | 0.0% |  |  |
+| num_percent | 0.0% | 0.0% |  |  |
+| num_tilde | 0.0% | 0.0% |  |  |
+| num_digits_url | 0.0% | 0.0% |  |  |
+| digit_ratio_url | 0.0% | 0.0% |  |  |
+| letter_ratio_url | 0.0% | 0.0% |  |  |
+| special_char_ratio | 0.0% | 0.0% |  |  |
+| has_ip_address | 0.0% | 0.0% |  |  |
+| uses_https | 0.0% | 0.0% |  |  |
+| has_port | 0.0% | 0.0% |  |  |
+| num_subdomains | 0.0% | 0.0% |  |  |
+| subdomain_length | 0.0% | 0.0% |  |  |
+| tld_length | 0.1% | 0.0% |  |  |
+| suspicious_tld | 0.1% | 0.0% |  |  |
+| is_shortened | 0.0% | 0.0% |  |  |
+| has_double_slash_redirect | 0.0% | 0.0% |  |  |
+| has_http_in_path | 0.0% | 0.0% |  |  |
+| has_punycode | 0.0% | 0.0% |  |  |
+| has_mixed_script | 0.0% | 0.0% |  |  |
+| url_entropy | 0.0% | 0.0% |  |  |
+| hostname_entropy | 0.0% | 0.0% |  |  |
+| longest_token_length | 0.0% | 0.0% |  |  |
+| avg_token_length | 0.0% | 0.0% |  |  |
+| num_path_tokens | 0.0% | 0.0% |  |  |
+| num_query_params | 0.0% | 0.0% |  |  |
+| suspicious_file_extension | 0.0% | 0.0% |  |  |
+| brand_in_subdomain | 0.0% | 0.0% |  |  |
+| brand_in_path | 0.0% | 0.0% |  |  |
+| has_sensitive_word_url | 0.0% | 0.0% |  |  |
+| num_sensitive_words_url | 0.0% | 0.0% |  |  |
+| hostname_digit_ratio | 0.0% | 0.0% |  |  |
+| max_char_repeat | 0.0% | 0.0% |  |  |
+| hostname_vowel_ratio | 0.1% | 0.0% |  |  |
+| domain_age_days | 25.1% | 24.9% |  |  |
+| domain_expiry_days | 25.2% | 26.0% |  |  |
+| registration_length_days | 25.2% | 26.0% |  |  |
+| whois_available | 24.5% | 24.3% |  |  |
+| whois_privacy | 83.1% | 81.8% |  |  |
+| days_since_whois_update | 25.3% | 24.9% |  |  |
+| registrant_country_known | 95.1% | 90.6% |  |  |
+| num_a_records | 0.1% | 0.4% |  |  |
+| has_mx_record | 0.6% | 0.6% |  |  |
+| num_name_servers | 0.1% | 0.3% |  |  |
+| dns_min_ttl | 10.1% | 1.1% |  |  |
+| tranco_rank | 0.0% | 0.0% |  |  |
+| in_tranco_top_1m | 0.0% | 0.0% |  |  |
+| ssl_valid | 0.0% | 0.2% |  |  |
+| ssl_cert_age_days | 12.2% | 15.6% |  |  |
+| ssl_validity_days | 12.2% | 15.6% |  |  |
+| ssl_free_ca | 12.2% | 15.6% |  |  |
+| ssl_hostname_match | 12.2% | 15.6% |  |  |
+| ssl_san_count | 12.2% | 15.6% |  |  |
+| suspicious_asn | 100.0% | 100.0% |  |  |
+| num_forms | 16.9% | 20.3% |  |  |
+| num_password_fields | 16.9% | 20.3% |  |  |
+| form_action_external | 16.9% | 20.3% |  |  |
+| form_action_empty | 16.9% | 20.3% |  |  |
+| form_action_mailto | 16.9% | 20.3% |  |  |
+| num_input_fields | 16.9% | 20.3% |  |  |
+| num_hidden_inputs | 16.9% | 20.3% |  |  |
+| num_iframes | 16.9% | 20.3% |  |  |
+| has_invisible_iframe | 16.9% | 20.3% |  |  |
+| num_script_tags | 16.9% | 20.3% |  |  |
+| num_external_scripts | 16.9% | 20.3% |  |  |
+| has_eval_or_unescape | 16.9% | 20.3% |  |  |
+| has_js_obfuscation | 16.9% | 20.3% |  |  |
+| has_js_redirect | 16.9% | 20.3% |  |  |
+| has_meta_refresh | 16.9% | 20.3% |  |  |
+| disables_right_click | 16.9% | 20.3% |  |  |
+| has_popup_window | 16.9% | 20.3% |  |  |
+| num_links | 16.9% | 20.3% |  |  |
+| external_link_ratio | 64.6% | 32.1% |  |  |
+| null_link_ratio | 64.6% | 32.1% |  |  |
+| favicon_external | 16.9% | 20.3% |  |  |
+| external_resource_ratio | 52.3% | 30.4% |  |  |
+| title_brand_mismatch | 16.9% | 20.3% |  |  |
+| copyright_brand_mismatch | 16.9% | 20.3% |  |  |
+| html_length | 16.9% | 20.3% |  |  |
+| num_hidden_elements | 16.9% | 20.3% |  |  |
+| has_login_keywords_page | 16.9% | 20.3% |  |  |
+| num_images | 16.9% | 20.3% |  |  |
+| text_to_html_ratio | 17.6% | 20.7% |  |  |
+| has_base64_content | 16.9% | 20.3% |  |  |
+| spf_pass |  |  | 82.6% | 100.0% |
+| spf_fail |  |  | 82.6% | 100.0% |
+| dkim_pass |  |  | 79.3% | 100.0% |
+| dkim_absent |  |  | 0.0% | 0.0% |
+| dmarc_pass |  |  | 83.1% | 100.0% |
+| dmarc_policy_strict |  |  | 100.0% | 100.0% |
+| from_replyto_mismatch |  |  | 0.0% | 0.0% |
+| from_returnpath_mismatch |  |  | 0.3% | 82.5% |
+| display_name_spoof |  |  | 0.0% | 0.0% |
+| sender_in_tranco |  |  | 0.0% | 0.0% |
+| num_received_headers |  |  | 0.0% | 0.0% |
+| received_chain_inconsistent |  |  | 0.0% | 83.1% |
+| message_id_domain_mismatch |  |  | 3.8% | 0.0% |
+| suspicious_mailer |  |  | 0.0% | 0.0% |
+| date_header_anomaly |  |  | 0.0% | 0.0% |
+| html_only |  |  | 0.0% | 0.0% |
+| num_attachments |  |  | 0.0% | 0.0% |
+| risky_attachment_type |  |  | 0.0% | 0.0% |
+| num_urls_in_email |  |  | 0.0% | 0.0% |
+| link_text_mismatch |  |  | 0.0% | 0.0% |
+| num_brand_mentions |  |  | 0.0% | 0.0% |
+| num_urgency_terms |  |  | 0.0% | 0.0% |
+| num_threat_terms |  |  | 0.0% | 0.0% |
+| num_reward_terms |  |  | 0.0% | 0.0% |
+| num_credential_terms |  |  | 0.0% | 0.0% |
+| num_financial_terms |  |  | 0.0% | 0.0% |
+| generic_greeting |  |  | 0.0% | 0.0% |
+| subject_urgency_terms |  |  | 0.0% | 0.0% |
+| fake_reply_subject |  |  | 0.0% | 0.0% |
+| subject_length |  |  | 0.0% | 0.0% |
+| word_count |  |  | 0.0% | 0.0% |
+| uppercase_ratio |  |  | 2.9% | 0.1% |
+| exclamation_count |  |  | 0.0% | 0.0% |
+| spelling_error_ratio |  |  | 3.0% | 0.1% |
+| readability_score |  |  | 2.9% | 0.1% |
+| avg_sentence_length |  |  | 2.9% | 0.1% |
+| call_to_action_count |  |  | 0.0% | 0.0% |
+| sentiment_polarity |  |  | 2.7% | 0.1% |
+| lexical_diversity |  |  | 2.9% | 0.1% |
+| num_currency_symbols |  |  | 0.0% | 0.0% |
+| num_phone_numbers |  |  | 0.0% | 0.0% |
+| non_ascii_ratio |  |  | 1.3% | 0.0% |
+| phishing_lexicon_score |  |  | 2.9% | 0.1% |
+| deadline_mention |  |  | 0.0% | 0.0% |
+| brand_sender_mismatch |  |  | 0.0% | 0.0% |
 
 <!-- GENERATED:END -->

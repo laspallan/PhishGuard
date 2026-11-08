@@ -27,7 +27,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# To load the trained models in the API. Same versions as training (ml/ `train` extra), because
+# joblib files are only reliable with the versions that wrote them; change them together.
+serve = [
+    "numpy==2.4.6",
+    "scikit-learn==1.9.1",
+    "joblib==1.6.0",
+    "xgboost==3.2.0",
+    "lightgbm==4.7.0",
+]
 dev = [
+    "numpy==2.4.6",
+    "scikit-learn==1.9.1",
+    "joblib==1.6.0",
     "pytest>=8.3",
     "httpx>=0.27",  # required by FastAPI's TestClient
     "ruff>=0.8",

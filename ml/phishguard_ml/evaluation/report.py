@@ -23,6 +23,17 @@ from phishguard_ml.training import calibration, ensembles
 from phishguard_ml.training.tabular import MODELS
 
 THRESHOLD = 0.5
+# The cascade: this tabular soft vote first, DistilBERT on this text inside the band.
+CASCADE_TABULAR = {"url": "live", "email": "no_header"}
+CASCADE_TEXT = {"url": "text_full", "email": "text_body"}
+
+
+def _column(values: list) -> np.ndarray:
+    """Text columns stay Python strings: a fixed-width array is as wide as the longest value,
+    and URL group keys can be whole links (1.2 GiB for one column of 87,706 rows)."""
+    if values and isinstance(values[0], str):
+        return np.asarray(values, dtype=object)
+    return np.asarray(values)
 
 
 def _runs() -> dict[tuple[str, str], dict[str, dict]]:
@@ -31,7 +42,7 @@ def _runs() -> dict[tuple[str, str], dict[str, dict]]:
         folder = oof_file.parent
         table = pq.read_table(oof_file).to_pydict()
         found.setdefault((folder.parent.parent.name, folder.parent.name), {})[folder.name] = {
-            key: np.asarray(value) for key, value in table.items()
+            key: _column(value) for key, value in table.items()
         }
     return found
 
@@ -64,7 +75,8 @@ def _row(name: str, y, p, groups, sources, reference: np.ndarray | None, n_boot:
 
 def build(n_boot: int = 1000) -> dict:
     results = {}
-    for (modality, feature_set), runs in sorted(_runs().items()):
+    _runs_found = _runs()
+    for (modality, feature_set), runs in sorted(_runs_found.items()):
         first = next(iter(runs.values()))
         y, folds = first["label"].astype(int), first["fold"].astype(int)
         groups, sources = first["group"], first["source"]
@@ -80,6 +92,14 @@ def build(n_boot: int = 1000) -> dict:
             candidates["stacker"] = ensembles.stacked_out_of_fold(
                 [raw[m] for m in MODELS], y, folds
             )
+            text_run = _runs_found.get((modality, CASCADE_TEXT[modality]), {}).get("distilbert")
+            if text_run is not None and feature_set == CASCADE_TABULAR[modality]:
+                if not np.array_equal(text_run["sample_id"], first["sample_id"]):
+                    raise ValueError(f"{modality}: DistilBERT covers different samples")
+                candidates["cascade"] = ensembles.cascade(
+                    candidates["soft_vote"],
+                    calibration.cross_fitted(text_run["p_phishing"], y, folds),
+                )
         detected = baseline.load() if modality == "email" else None
         if detected is not None:
             ids = first["sample_id"]
@@ -108,14 +128,18 @@ def _fmt(value: float) -> str:
     )
 
 
-def markdown(results: dict) -> str:
-    lines = ["# Development results (5-fold CV, out-of-fold, calibrated, threshold 0.5)", ""]
+DEV_TITLE = "Development results (5-fold CV, out-of-fold, calibrated, threshold 0.5)"
+
+
+def markdown(results: dict, title: str = DEV_TITLE, reference: str = "soft vote") -> str:
+    """`reference` names what the McNemar column compares against (the rows' reference)."""
+    lines = [f"# {title}", ""]
     for key, rows in results.items():
         lines += [
             f"## {key}",
             "",
             "| Model | n | Accuracy | Precision | Recall | F1 [95% CI] | FPR [95% CI] | ECE "
-            "| McNemar p vs soft vote |",
+            f"| McNemar p vs {reference} |",
             "|---|---|---|---|---|---|---|---|---|",
         ]
         for r in rows:

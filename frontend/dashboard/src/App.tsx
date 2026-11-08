@@ -2,7 +2,7 @@
 import { Route, Routes } from "react-router-dom";
 
 import { LoginPage } from "@/features/auth";
-import { CampaignsPage } from "@/features/campaigns";
+import { CampaignsPage, SimulationPage } from "@/features/campaigns";
 import { DetectionsPage } from "@/features/detections";
 import { ExperimentsPage } from "@/features/experiments";
 import { ModelsPage } from "@/features/models";
@@ -16,6 +16,7 @@ export const menu: MenuItem[] = [
   { path: "/", label: "Overview", element: <OverviewPage /> },
   { path: "/detections", label: "Detections", element: <DetectionsPage /> },
   { path: "/campaigns", label: "Campaigns", element: <CampaignsPage /> },
+  { path: "/simulation", label: "Simulation", element: <SimulationPage /> },
   { path: "/models", label: "Models", element: <ModelsPage /> },
   { path: "/experiments", label: "Experiments", element: <ExperimentsPage /> },
   { path: "/threat-intel", label: "Threat Intel", element: <ThreatIntelPage /> },

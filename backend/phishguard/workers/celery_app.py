@@ -18,4 +18,9 @@ app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    # Answers can hold a page (up to 2 MB): keep them only as long as a scan could wait.
+    result_expires=300,
+    # A live scan must fail fast if Redis is down, not hang until its deadline has passed.
+    broker_connection_timeout=2,
+    redis_socket_connect_timeout=2,
 )

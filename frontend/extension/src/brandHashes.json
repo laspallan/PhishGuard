@@ -1,0 +1,231 @@
+{
+ "generated_at": "2026-11-08T14:22:27+00:00",
+ "method": "dhash 9x8 of the 32x32 favicon, from https://<brand domain>/favicon.ico",
+ "brands": [
+  {
+   "brand": "adobe",
+   "domains": [
+    "adobe.com"
+   ],
+   "hash": "0331307868e4e403"
+  },
+  {
+   "brand": "amazon",
+   "domains": [
+    "amazon.co.uk",
+    "amazon.com",
+    "amazon.de"
+   ],
+   "hash": "03010086f0300103"
+  },
+  {
+   "brand": "americanexpress",
+   "domains": [
+    "americanexpress.com"
+   ],
+   "hash": "003a6a756b2d3f00"
+  },
+  {
+   "brand": "aol",
+   "domains": [
+    "aol.com"
+   ],
+   "hash": "0301252f4d450103"
+  },
+  {
+   "brand": "apple",
+   "domains": [
+    "apple.com",
+    "icloud.com"
+   ],
+   "hash": "3365868e8e866133"
+  },
+  {
+   "brand": "att",
+   "domains": [
+    "att.com"
+   ],
+   "hash": "0f4d03e18621030f"
+  },
+  {
+   "brand": "bankofamerica",
+   "domains": [
+    "bankofamerica.com"
+   ],
+   "hash": "000e0f37130f0c00"
+  },
+  {
+   "brand": "chase",
+   "domains": [
+    "chase.com"
+   ],
+   "hash": "0723617171790d0f"
+  },
+  {
+   "brand": "coinbase",
+   "domains": [
+    "coinbase.com"
+   ],
+   "hash": "0c0733717133070c"
+  },
+  {
+   "brand": "dhl",
+   "domains": [
+    "dhl.com"
+   ],
+   "hash": "0000c2332bdc0000"
+  },
+  {
+   "brand": "docusign",
+   "domains": [
+    "docusign.com",
+    "docusign.net"
+   ],
+   "hash": "00070f0f07070600"
+  },
+  {
+   "brand": "ebay",
+   "domains": [
+    "ebay.com"
+   ],
+   "hash": "07333b1818181800"
+  },
+  {
+   "brand": "gmail",
+   "domains": [
+    "gmail.com",
+    "google.com"
+   ],
+   "hash": "2b0e362321330f2b"
+  },
+  {
+   "brand": "google",
+   "domains": [
+    "gmail.com",
+    "google.com"
+   ],
+   "hash": "2b0e362321330f2b"
+  },
+  {
+   "brand": "instagram",
+   "domains": [
+    "instagram.com"
+   ],
+   "hash": "3fc4b6aaaab2c061"
+  },
+  {
+   "brand": "irs",
+   "domains": [
+    "irs.gov"
+   ],
+   "hash": "2b3569ea6a552917"
+  },
+  {
+   "brand": "metamask",
+   "domains": [
+    "metamask.io"
+   ],
+   "hash": "607171711317694d"
+  },
+  {
+   "brand": "microsoft",
+   "domains": [
+    "live.com",
+    "microsoft.com",
+    "office.com",
+    "outlook.com"
+   ],
+   "hash": "1010101010101010"
+  },
+  {
+   "brand": "netflix",
+   "domains": [
+    "netflix.com"
+   ],
+   "hash": "33333b1313333333"
+  },
+  {
+   "brand": "office365",
+   "domains": [
+    "microsoft.com",
+    "office.com"
+   ],
+   "hash": "1010101010101010"
+  },
+  {
+   "brand": "outlook",
+   "domains": [
+    "live.com",
+    "microsoft.com",
+    "outlook.com"
+   ],
+   "hash": "1010101010101010"
+  },
+  {
+   "brand": "paypal",
+   "domains": [
+    "paypal.com",
+    "paypal.me"
+   ],
+   "hash": "000f03071f3f0c08"
+  },
+  {
+   "brand": "steam",
+   "domains": [
+    "steamcommunity.com",
+    "steampowered.com"
+   ],
+   "hash": "0f1d1c343041630f"
+  },
+  {
+   "brand": "ups",
+   "domains": [
+    "ups.com"
+   ],
+   "hash": "0701332d2b57170f"
+  },
+  {
+   "brand": "usps",
+   "domains": [
+    "usps.com"
+   ],
+   "hash": "0101f5c6d8c10101"
+  },
+  {
+   "brand": "visa",
+   "domains": [
+    "visa.com"
+   ],
+   "hash": "0003030303030300"
+  },
+  {
+   "brand": "wellsfargo",
+   "domains": [
+    "wellsfargo.com"
+   ],
+   "hash": "0000acadd4d40000"
+  },
+  {
+   "brand": "whatsapp",
+   "domains": [
+    "whatsapp.com"
+   ],
+   "hash": "17719090dac6f1d7"
+  },
+  {
+   "brand": "yahoo",
+   "domains": [
+    "yahoo.com"
+   ],
+   "hash": "1918383070606061"
+  }
+ ],
+ "missing": [
+  "binance",
+  "dropbox",
+  "facebook",
+  "fedex",
+  "linkedin",
+  "mastercard"
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "A": {
+  "records": [
+   "3.164.195.105",
+   "3.164.195.15",
+   "3.164.195.82",
+   "3.164.195.95"
+  ],
+  "ttl": 59
+ },
+ "AAAA": {
+  "error": "NoAnswer"
+ },
+ "MX": {
+  "error": "NoAnswer"
+ },
+ "NS": {
+  "records": [
+   "ns-1435.awsdns-51.org.",
+   "ns-160.awsdns-20.com.",
+   "ns-1969.awsdns-54.co.uk.",
+   "ns-927.awsdns-51.net."
+  ],
+  "ttl": 1371
+ }
+}

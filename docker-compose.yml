@@ -19,8 +19,10 @@ services:
 
   redis:
     image: redis:7
-    ports:
-      - "127.0.0.1:6379:6379"
+    networks: [default, evidence]
+    # Not published: only the API and the evidence collector reach it, on the compose networks
+    # (live_url_scanning.md, section 5.3). To run the API on the host instead, add
+    # `-f docker-compose.yml -f docker-compose.dev.yml`, which publishes it on 127.0.0.1 only.
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -29,10 +31,19 @@ services:
 
   api:
     build: ./backend
+    networks: [default, evidence]
     env_file: .env
     environment:
       PHISHGUARD_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       PHISHGUARD_REDIS_URL: redis://redis:6379/0
+      PHISHGUARD_DATA_DIR: /data
+      PHISHGUARD_GOPHISH_URL: https://gophish:3333
+      PHISHGUARD_GOPHISH_CA_FILE: /data/gophish/cert/gophish_admin.crt
+    # Only the trained models and GoPhish's certificate (not its key), read-only: the API never
+    # sees the stored phishing pages.
+    volumes:
+      - ./data/models:/data/models:ro
+      - ./data/gophish/cert:/data/gophish/cert:ro
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -69,6 +80,43 @@ services:
     security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
+  # --- Live scan evidence (Phase 5, decision D11). Started only with `--profile live`. ---
+  # Same image and limits as the collectors, but it answers one URL at a time through Redis.
+  # Its own network holds only Redis and the API, so it cannot reach Postgres; it has no secrets
+  # and no volume, and its file system is read-only. No ports: it only takes jobs from Redis.
+  evidence-collector:
+    profiles: ["live"]
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+    command: ["evidence-worker"]
+    environment:
+      PHISHGUARD_REDIS_URL: redis://redis:6379/0
+    networks: [evidence]
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # --- Simulations (Phase 6). Started only with `--profile simulate`. ---
+  # Both ports stay on this PC. It can send nothing until a sending profile and campaign exist,
+  # and campaigns.launch needs the ethics approval reference.
+  gophish:
+    profiles: ["simulate"]
+    image: gophish/gophish:0.12.1
+    ports:
+      - "127.0.0.1:3333:3333"
+      - "127.0.0.1:8088:80"
+    # Our admin certificate (names gophish, localhost, 127.0.0.1), made by `make gophish-cert`.
+    # GoPhish uses these files instead of making its own, which has no host name to check.
+    volumes:
+      - ./data/gophish/cert/gophish_admin.crt:/opt/gophish/gophish_admin.crt:ro
+      - ./data/gophish/key/gophish_admin.key:/opt/gophish/gophish_admin.key:ro
+
   # --- Signature baseline (Phase 3, decision D2). Started only with `--profile baseline`. ---
   # No network at all; sees only data/baseline/ (the exported development emails).
   spamassassin:
@@ -78,6 +126,9 @@ services:
     volumes: ["./data/baseline:/work"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+
+networks:
+  evidence:
 
 volumes:
   pgdata:

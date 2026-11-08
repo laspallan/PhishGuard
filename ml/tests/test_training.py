@@ -1,5 +1,8 @@
 import json
+import math
 import re
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +12,12 @@ import pytest
 
 import phishguard_ml
 from phishguard.models.enums import Modality
-from phishguard.services.features.extractor import FEATURE_NAMES, feature_code_hash
+from phishguard.services.features.extractor import (
+    FEATURE_NAMES,
+    UrlEvidence,
+    feature_code_hash,
+    url_features,
+)
 from phishguard_ml.data import split
 from phishguard_ml.data.records import SampleRecord, Source
 from phishguard_ml.features import matrix
@@ -37,7 +45,7 @@ def test_feature_sets():
     no_path = feature_set(Modality.URL, "no_path")
     assert len(no_path) == 15 + 50  # host-only F1-F45 features + F46-F95
     assert "path_length" not in no_path and "hostname_length" in no_path
-    assert len(feature_set(Modality.URL, "no_rdap")) == 95 - 7
+    assert len(feature_set(Modality.URL, "no_rdap")) == 95 - 7 - 1  # F46-F52 and F55
     assert "tranco_rank" not in feature_set(Modality.URL, "no_tranco")
     assert feature_set(Modality.EMAIL, "no_header") == list(FEATURE_NAMES[115:])
     assert len(feature_set(Modality.EMAIL, "no_age")) == 45 - 8
@@ -158,3 +166,62 @@ def test_train_and_save_writes_oof_and_metadata(isolated_data_dir):
     assert saved["seed"] == 42 and saved["n_samples"] == 150
     oof = pq.read_table(folder / "oof.parquet").to_pylist()
     assert len(oof) == 150 and {"sample_id", "fold", "label", "source", "p_phishing"} <= set(oof[0])
+
+
+def _same(a: float, b: float) -> bool:
+    return (math.isnan(a) and math.isnan(b)) or a == b
+
+
+LIVE_EVIDENCE = UrlEvidence(
+    url="https://login.shop-test.com/a?x=1",
+    captured_at=datetime(2026, 11, 5, tzinfo=UTC),
+    html="<html><title>t</title><form><input type=password></form><a href='/b'>b</a></html>",
+    final_url="https://login.shop-test.com/a?x=1",
+    dns={"A": {"records": ["203.0.113.5"], "ttl": 60}, "NS": {"error": "NoAnswer"}},
+    tls={
+        "verified": True,
+        "issuer": "O=Let's Encrypt",
+        "subject": "CN=login.shop-test.com",
+        "not_before": "2026-10-01T00:00:00+00:00",
+        "not_after": "2026-12-30T00:00:00+00:00",
+        "san": ["login.shop-test.com"],
+    },
+    rdap={
+        "status": 200,
+        "response": {
+            "nameservers": [{"ldhName": "ns1.x"}, {"ldhName": "ns2.x"}],
+            "events": [{"eventAction": "registration", "eventDate": "2020-01-01T00:00:00Z"}],
+        },
+    },
+)
+
+
+def _values(evidence: UrlEvidence, ranks: dict, names: list[str]) -> list[float]:
+    values = dict(zip(FEATURE_NAMES, url_features(evidence, ranks), strict=True))
+    return [values[n] for n in names]
+
+
+def test_live_feature_sets_have_the_agreed_contents():
+    live = feature_set(Modality.URL, "live")
+    stage1 = feature_set(Modality.URL, "live_stage1")
+    assert len(live) == 95 - 7 - 2 - 1 - 1
+    assert stage1 == [*FEATURE_NAMES[:45], "num_a_records", "has_mx_record", "dns_min_ttl"]
+    assert set(stage1) <= set(live)
+
+
+def test_live_model_inputs_never_depend_on_rdap_or_tranco():
+    """Training had RDAP and Tranco, a live scan has neither: the inputs must not notice."""
+    names = feature_set(Modality.URL, "live")
+    with_both = _values(LIVE_EVIDENCE, {"shop-test.com": 5}, names)
+    without = _values(replace(LIVE_EVIDENCE, rdap=None), {}, names)
+    assert all(_same(a, b) for a, b in zip(with_both, without, strict=True))
+    # The check can fail: F55 would notice, which is why it is left out of the live sets.
+    f55 = ["num_name_servers"]
+    assert _values(LIVE_EVIDENCE, {}, f55) != _values(replace(LIVE_EVIDENCE, rdap=None), {}, f55)
+
+
+def test_stage_1_inputs_need_no_contact_with_the_target():
+    names = feature_set(Modality.URL, "live_stage1")
+    no_contact = replace(LIVE_EVIDENCE, html=None, tls=None, final_url=None, rdap=None)
+    full = _values(LIVE_EVIDENCE, {"shop-test.com": 5}, names)
+    assert all(_same(a, b) for a, b in zip(full, _values(no_contact, {}, names), strict=True))

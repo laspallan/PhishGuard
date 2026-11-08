@@ -1,0 +1,14 @@
+{
+ "url": "https://bentley.com/",
+ "redirects": [
+  "https://www.bentley.com/"
+ ],
+ "fetched_at": "2026-11-02T05:28:36.553501+00:00",
+ "status": 200,
+ "final_url": "https://www.bentley.com/",
+ "content_type": "text/html; charset=utf-8",
+ "bytes": 429223,
+ "same_site_links": [
+  "https://www.bentley.com/en/company/ventures/"
+ ]
+}

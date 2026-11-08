@@ -43,15 +43,19 @@ def fit_final(folder: Path, data: DevData) -> dict:
     )
     joblib.dump(model, folder / "model.joblib")
     joblib.dump(calibrator, folder / "calibrator.joblib")
+    return register(folder, run, "model.joblib", feature_names=data.feature_names)
 
-    model_hash = hashlib.sha256((folder / "model.joblib").read_bytes()).hexdigest()
+
+def register(folder: Path, run: dict, model_file: str, *, feature_names: list[str]) -> dict:
+    """Writes model.json (last, it marks a finished run) and adds the version to the registry."""
+    model_hash = hashlib.sha256((folder / model_file).read_bytes()).hexdigest()
     entry = {
         "version": f"{run['modality']}-{run['feature_set']}-{run['model']}-{model_hash[:12]}",
         "path": folder.relative_to(paths.models_dir()).as_posix(),
         "model": run["model"],
         "modality": run["modality"],
         "feature_set": run["feature_set"],
-        "feature_names": data.feature_names,
+        "feature_names": feature_names,
         "params": run["params"],
         "seed": run["seed"],
         "feature_code_hash": run["feature_code_hash"],

@@ -1,5 +1,5 @@
 # Run from the repo root. On Windows, install make first (e.g. `winget install ezwinports.make`).
-.PHONY: install test test-db migrate lint format up down
+.PHONY: install test test-db test-text migrate lint format results up down gophish-cert
 
 install:
 	cd backend && python -m pip install -e ".[dev]"
@@ -18,6 +18,10 @@ test:
 test-db:
 	cd backend && python -m pytest -m postgres
 
+# LSTM, CNN and DistilBERT code: needs PyTorch, so it runs in ml/.venv-text (see ml/README.md).
+test-text:
+	cd ml && env -u PYTHONHOME .venv-text/Scripts/python.exe -m pytest tests/test_text_models.py
+
 migrate:
 	cd backend && python -m alembic upgrade head
 
@@ -33,8 +37,17 @@ format:
 	cd ml && python -m ruff check --fix . && python -m ruff format .
 	cd gateway && python -m ruff check --fix . && python -m ruff format .
 
+results:
+	cd ml && python -m phishguard_ml results
+
 up:
 	docker compose up -d --build
 
 down:
 	docker compose down
+
+# GoPhish admin certificate that names its hosts, so the API can check it (decisions.md, Phase 6).
+# Needs openssl (ships with Git for Windows). Makes data/gophish/, which is gitignored.
+gophish-cert:
+	mkdir -p data/gophish/cert data/gophish/key
+	MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj "/O=PhishGuard GoPhish" -addext "subjectAltName=DNS:gophish,DNS:localhost,IP:127.0.0.1" -keyout data/gophish/key/gophish_admin.key -out data/gophish/cert/gophish_admin.crt

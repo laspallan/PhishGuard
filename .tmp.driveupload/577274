@@ -1,0 +1,13 @@
+{
+ "verified": true,
+ "issuer": "CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1,O=DigiCert Inc,C=US",
+ "subject": "CN=www.gov.wales,O=Welsh Government,L=Cardiff,C=GB",
+ "not_before": "2026-09-15T00:00:00+00:00",
+ "not_after": "2027-04-01T23:59:59+00:00",
+ "san": [
+  "www.gov.wales",
+  "gov.wales",
+  "www.llyw.cymru",
+  "llyw.cymru"
+ ]
+}

@@ -8,9 +8,12 @@ interface SidebarProps {
 
 export function Sidebar({ menu }: SidebarProps) {
   return (
-    <nav aria-label="Main menu" className="w-56 shrink-0 border-r border-slate-200 bg-white p-4">
-      <p className="mb-6 text-lg font-semibold">PhishGuard</p>
-      <ul className="space-y-1">
+    <nav
+      aria-label="Main menu"
+      className="shrink-0 border-b border-slate-200 bg-white p-4 md:w-56 md:border-r md:border-b-0"
+    >
+      <p className="mb-3 text-lg font-semibold md:mb-6">PhishGuard</p>
+      <ul className="flex flex-wrap gap-1 md:block md:space-y-1">
         {menu.map((item) => (
           <li key={item.path}>
             <NavLink

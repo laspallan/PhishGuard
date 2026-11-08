@@ -22,6 +22,7 @@ import re
 import socket
 import ssl
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -169,12 +170,23 @@ def pinned_client(**kwargs) -> httpx.Client:
 
 
 def fetch_page(
-    url: str, client: httpx.Client, resolver: Callable[[str], list[str]] | None = None
+    url: str,
+    client: httpx.Client,
+    resolver: Callable[[str], list[str]] | None = None,
+    *,
+    deadline: float | None = None,
 ) -> tuple[dict, bytes | None]:
-    """GET the URL, following redirects one hop at a time. Returns (meta, html or None)."""
+    """GET the URL, following redirects one hop at a time. Returns (meta, html or None).
+
+    `deadline` (time.monotonic() value, live scans only) stops the whole fetch, all hops and
+    the body included; a late page is dropped, not cut, since a part of it would give other
+    feature values than the page. The batch collector passes none and is unchanged."""
     meta: dict = {"url": url, "redirects": [], "fetched_at": datetime.now(UTC).isoformat()}
     current = url
     for hop in range(MAX_REDIRECTS + 1):
+        if deadline is not None and time.monotonic() >= deadline:
+            meta["skipped"] = "deadline"
+            return meta, None
         try:
             check_safe_target(current, resolver)
         except UnsafeTargetError as error:
@@ -185,7 +197,8 @@ def fetch_page(
             return meta, None
         client.cookies.clear()
         try:
-            with client.stream("GET", current, follow_redirects=False) as response:
+            limit = {} if deadline is None else {"timeout": max(deadline - time.monotonic(), 0.1)}
+            with client.stream("GET", current, follow_redirects=False, **limit) as response:
                 meta["status"] = response.status_code
                 meta["final_url"] = current
                 if response.is_redirect and "location" in response.headers:
@@ -199,6 +212,9 @@ def fetch_page(
                     return meta, None
                 body = bytearray()
                 for chunk in response.iter_bytes():
+                    if deadline is not None and time.monotonic() >= deadline:
+                        meta["skipped"] = "deadline"
+                        return meta, None
                     body.extend(chunk)
                     if len(body) > MAX_BYTES:
                         meta["truncated"] = True
@@ -218,10 +234,10 @@ def fetch_page(
     return meta, None
 
 
-def dns_info(host: str) -> dict:
+def dns_info(host: str, lifetime: float = 5.0) -> dict:
     result: dict = {}
     resolver = dns.resolver.Resolver()
-    resolver.lifetime = 5.0
+    resolver.lifetime = lifetime
     for kind in DNS_TYPES:
         try:
             answer = resolver.resolve(host, kind)
@@ -247,19 +263,24 @@ def _cert_summary(der: bytes) -> dict:
     }
 
 
-def _connect_checked(host: str, port: int, resolver: Callable[[str], list[str]] | None):
+def _connect_checked(
+    host: str, port: int, resolver: Callable[[str], list[str]] | None, timeout: float = 10
+):
     """A TCP connection to one of the host's checked public addresses (D11f)."""
     last_error: OSError | None = None
     for address in safe_addresses(host, resolver):
         try:
-            return socket.create_connection((address, port), timeout=10)
+            return socket.create_connection((address, port), timeout=timeout)
         except OSError as error:
             last_error = error
     raise last_error  # type: ignore[misc]  # safe_addresses never returns an empty list
 
 
 def tls_info(
-    host: str, port: int = 443, resolver: Callable[[str], list[str]] | None = None
+    host: str,
+    port: int = 443,
+    resolver: Callable[[str], list[str]] | None = None,
+    timeout: float = 10,
 ) -> dict:
     """Certificate details. 'verified' is True only if the chain and hostname both check out.
 
@@ -271,7 +292,7 @@ def tls_info(
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
         try:
-            with _connect_checked(host, port, resolver) as sock:
+            with _connect_checked(host, port, resolver, timeout) as sock:
                 with context.wrap_socket(sock, server_hostname=host) as tls:
                     der = tls.getpeercert(binary_form=True)
             return {"verified": verify, **_cert_summary(der)}

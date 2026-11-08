@@ -1,0 +1,20 @@
+{
+ "A": {
+  "error": "NXDOMAIN"
+ },
+ "AAAA": {
+  "error": "NoAnswer"
+ },
+ "MX": {
+  "error": "NXDOMAIN"
+ },
+ "NS": {
+  "records": [
+   "ns-1157.awsdns-16.org.",
+   "ns-2042.awsdns-63.co.uk.",
+   "ns-26.awsdns-03.com.",
+   "ns-904.awsdns-49.net."
+  ],
+  "ttl": 900
+ }
+}

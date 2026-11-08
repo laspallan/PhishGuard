@@ -146,5 +146,43 @@ def test_cache_with_redis_and_bounded_memory():
     assert memory.get("a") is None and memory.get("c") == {"k": "c"}  # oldest evicted
 
 
-def test_compute_ti_score_empty():
-    assert compute_ti_score(None, None) == 0.0
+def _vt(results: dict) -> dict:
+    return {"data": {"attributes": {"last_analysis_results": results}}}
+
+
+def test_ti_score_by_hand():
+    # VirusTotal: 3 malicious + 0.5 * 1 suspicious = 3.5 of 5 -> 70; OTX: 2 of 5 pulses -> 40.
+    vt = _vt(
+        {
+            "A": {"category": "malicious", "engine_name": "A"},
+            "B": {"category": "malicious", "engine_name": "B"},
+            "C": {"category": "malicious", "engine_name": "C"},
+            "D": {"category": "suspicious", "engine_name": "D"},
+            "E": {"category": "harmless", "engine_name": "E"},
+        }
+    )
+    assert compute_ti_score(vt, {"pulse_info": {"count": 2}}) == 70.0
+    assert compute_ti_score(vt, {"pulse_info": {"count": 9}}) == 100.0  # the higher one, capped
+
+
+def test_the_feeds_of_our_phishing_urls_are_not_counted():
+    vt = _vt(
+        {
+            "Phishtank": {"category": "malicious", "engine_name": "Phishtank"},
+            "x": {"category": "malicious", "engine_name": "OpenPhish"},
+            "Other": {"category": "malicious", "engine_name": "Other"},
+        }
+    )
+    assert compute_ti_score(vt, None) == 20.0  # only "Other": 1 of 5
+
+
+def test_totals_are_used_only_without_per_engine_results():
+    assert compute_ti_score(VT_REPORT, None) == 70.0  # 3 + 0.5 * 1 = 3.5 of 5
+
+
+def test_not_found_is_zero_but_errors_and_nothing_are_missing():
+    assert compute_ti_score({"status": "not_found"}, {"status": "not_found"}) == 0.0
+    assert compute_ti_score({"error": "http_429"}, {"pulse_info": {"count": 1}}) == 20.0
+    assert compute_ti_score({"error": "http_429"}, {"error": "timeout"}) is None
+    assert compute_ti_score(None, None) is None
+    assert compute_ti_score({"data": {}}, {"pulse_info": {}}) is None  # nothing readable

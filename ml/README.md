@@ -84,6 +84,94 @@ python -m phishguard_ml report                   # -> data/models/results.md / r
 docker compose --profile collect up -d collector # daily fresh data for RQ3 (repo root)
 ```
 
+### Text models (LSTM, CNN, DistilBERT)
+
+`backend/.venv` cannot load PyTorch on this PC, so the text models have their own environment.
+ZKBioTime sets `PYTHONHOME` for the whole machine, so clear it for this environment only:
+
+```bash
+uv venv ml/.venv-text --python 3.11 --managed-python --seed
+env -u PYTHONHOME uv pip install --python ml/.venv-text/Scripts/python.exe torch --index-url https://download.pytorch.org/whl/cpu
+env -u PYTHONHOME uv pip install --python ml/.venv-text/Scripts/python.exe -e "backend[dev]" -e "ml[dev,train,text]"
+```
+
+CNN, after `train_queue.ps1` has finished: `powershell -File ml\train_text_queue.ps1`. The LSTM is
+left out of that queue because it is too slow on this CPU (timing in `PROGRESS.md`, Phase 3 step 4).
+
+LSTM and DistilBERT run on Google Colab, on development rows only. The locked test set stays on this
+PC. Each run reads one file from `data/colab/`, made by `text-export`. In Colab, choose Runtime >
+Change runtime type > GPU, mount Google Drive, upload the script and the data file, then for the LSTM:
+
+```bash
+pip install optuna
+python train_lstm.py --data dev_text_email_text_body.parquet --out /content/drive/MyDrive/pg_lstm_email
+# A disconnect costs at most one training: run the same command again. Copy the folder back, then:
+python -m phishguard_ml text-import path/to/pg_lstm_email
+```
+
+Use one Drive folder per run, for `email text_body`, `url text_host` and `url text_full`. Each line of
+its output shows the seconds that training took. For DistilBERT:
+
+```bash
+python -m phishguard_ml text-export --modality email --input text_body   # -> data/colab/
+# Upload that file and ml/colab/train_distilbert.py to Colab (GPU runtime), then:
+#   pip install transformers
+#   python train_distilbert.py --data dev_text_email_text_body.parquet --out /content/drive/MyDrive/pg_email
+# A disconnect costs at most one fold: run the same command again. Copy the folder back, then:
+python -m phishguard_ml text-import path/to/pg_email
+```
+
+Do the same for `--modality url --input text_host` and `--input text_full`.
+
+## Threat intelligence and RQ2 (Phase 4)
+
+Needs `PHISHGUARD_VIRUSTOTAL_API_KEY` and `PHISHGUARD_ALIENVAULT_OTX_API_KEY` in `.env`, and the
+collector running. Lookups go only to VirusTotal and OTX (read-only); no URL is submitted.
+
+```powershell
+python -m phishguard_ml ti-record --daily   # 250 phishing + 250 legitimate a day -> data/ti_responses/
+python -m phishguard_ml rq2                 # after 8 days and url/live: -> data/models/rq2/results.md
+```
+
+`--daily` checks every 30 minutes and stops at the day's quota, so a restart never exceeds
+VirusTotal's 500 lookups a day.
+
+## Notifications for long jobs
+
+`ml\notify_status.ps1` shows a Windows notification when a training run ends (or fails), a training
+queue finishes, the SpamAssassin baseline is imported, or today's RQ2 lookups reach 500. It reads
+local files only. To run it every 30 minutes while you are logged in:
+
+```powershell
+schtasks /Create /SC MINUTE /MO 30 /TN "PhishGuard status" /TR "powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File D:\PhishGuard\ml\notify_status.ps1" /F
+schtasks /Delete /TN "PhishGuard status" /F      # to stop it
+```
+
+## Brand favicon hashes for the extension (D6)
+
+Needs the `brand` extra (Pillow). Fetches `/favicon.ico` from each brand's own domains only and
+writes `frontend/extension/src/brandHashes.json` (hashes only); rebuild the extension afterwards.
+
+```powershell
+python -m phishguard_ml brand-icons
+```
+
+## Final evaluation (Phase 8)
+
+```bash
+python -m phishguard_ml choose-band                # stage-1 band table, development data
+python -m phishguard_ml final-eval --confirm-models-are-frozen   # the ONE use of the locked test set
+python -m phishguard_ml final-report               # every final number, from the saved predictions
+python -m phishguard_ml results                    # or `make results`: every table above, in one go
+```
+
+`results` recomputes the development, RQ2 and final tables from the saved files. It reruns only what
+has been run before (so RQ2 is never computed early on part of the data) and never calls `final-eval`.
+
+`final-eval` refuses without the flag, logs each access in
+`data/models/final/locked_test_access.jsonl`, and refuses a model version that was evaluated
+before. Do not run it until every model is frozen.
+
 `python -m phishguard_ml snapshot` on your PC is refused on purpose; only `ml/Dockerfile` sets
 the flag that allows it.
 

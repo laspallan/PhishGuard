@@ -84,3 +84,39 @@ def test_train_and_report_end_to_end(isolated_data_dir, capsys):
     assert "mcnemar_vs_soft_vote" in rows["xgboost"]
     assert set(rows["xgboost"]["fpr_by_legitimate_source"]) == {"enron", "spamassassin"}
     assert "| soft_vote |" in report.results_path().read_text(encoding="utf-8")
+
+
+def test_text_columns_are_not_widened_to_the_longest_value():
+    groups = report._column(["a", "x" * 4000])
+    assert groups.dtype == object and list(groups) == ["a", "x" * 4000]
+    assert report._column([0.25, 0.75]).dtype == np.float64
+
+
+def test_resume_skips_only_runs_finished_with_the_same_settings(isolated_data_dir, capsys):
+    records = _dataset()
+    split.write_split(records, split.make_split(records), {})
+    rng = np.random.default_rng(0)
+    columns = {"sample_id": [str(r.sample_id) for r in records]}
+    for name in FEATURE_NAMES:
+        columns[name] = rng.normal(size=len(records))
+    table = pa.table(columns).replace_schema_metadata({"feature_code_hash": feature_code_hash()})
+    matrix.features_path().parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(table, matrix.features_path())
+    folder = isolated_data_dir / "models" / "email" / "no_header" / "lightgbm"
+    command = ["train", "--modality", "email", "--feature-set", "no_header", "--models", "lightgbm"]
+
+    def trained_at() -> str:
+        return json.loads((folder / "run.json").read_text())["trained_at"]
+
+    assert main([*command, "--trials", "1"]) == 0
+    first = trained_at()
+    assert main([*command, "--trials", "1", "--resume"]) == 0
+    assert trained_at() == first and "already complete" in capsys.readouterr().out
+
+    (folder / "shap.json").unlink()  # interrupted before the end of the run
+    assert main([*command, "--trials", "1", "--resume"]) == 0
+    second = trained_at()
+    assert second != first
+
+    assert main([*command, "--trials", "2", "--resume"]) == 0  # other settings: not the same run
+    assert trained_at() != second

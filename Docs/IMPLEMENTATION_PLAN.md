@@ -20,14 +20,14 @@ it stays **In progress**, with the unchecked items listed.
 | Phase | Status | Verified on | Notes |
 |---|---|---|---|
 | 0 Environment and skeleton | **Done** | 2026-11-02 | All acceptance checks verified (see PROGRESS.md). Carried forward: send the ethics-approval request (your action; needed before Phase 6) |
-| 1 Data and split | In progress | | Code, Enron and snapshots done. Before Done: RDAP finish, label/count/datacard, real split, live collector. See PROGRESS.md |
-| 2 Feature extractor | In progress | | F1–F140 built and tested (2026-11-02); extractor, matrix, data-card rates to do |
-| 3 Models, ensembles, baseline | In progress | | Step 1 (dev loader, tabular models) built on synthetic data 2026-11-03 |
+| 1 Data and split | **Done** | 2026-11-05 | 122,042 samples, frozen split; collector running. See PROGRESS.md |
+| 2 Feature extractor | **Done** | 2026-11-06 | All acceptance checks verified; training and API use one extractor. See PROGRESS.md |
+| 3 Models, ensembles, baseline | In progress | | Tabular queue running (`ml/train_queue.ps1`). LSTM, CNN, DistilBERT code built, not yet trained on real data; DistilBERT needs Colab |
 | 4 Threat intelligence, RQ2 | In progress | | Clients, rate limits, cache, recorder (2026-11-04). Open: ti_score formula, subset, RQ2 |
-| 5 Backend API and DB | In progress | | DB schema, migration and model tests built early (2026-11-02, see `Docs/database.md`). Still open: endpoints, inference service, Celery worker, parity and latency checks |
-| 6 Simulation, feedback loop, RQ3 | Not started | | |
-| 7 Extension and gateway | In progress | | Extension and IMAP gateway built and tested (2026-11-04). Open: D6, end-to-end with a model |
-| 8 Dashboard, final evaluation | Not started | | |
+| 5 Backend API and DB | In progress | | D11 steps 1–5 built, read-only admin API added; real URL scans wait for M1 and M2. See PROGRESS.md |
+| 6 Simulation, feedback loop, RQ3 | In progress | | Built and tested 2026-11-06, nobody contacted. Blocked for use on people until ethics approval; no real RQ3 rounds yet |
+| 7 Extension and gateway | In progress | | Built and unit-tested; D6 favicon check built 2026-11-08. Open: loading in real browsers, end-to-end with a model |
+| 8 Dashboard, final evaluation | In progress | | Dashboard and `final-eval` built. Locked test set not touched; waits for frozen models and your confirmation |
 | 9 Write-up | Not started | | |
 
 ---
@@ -54,20 +54,13 @@ Targets: accuracy > 95%, FPR < 5%. Real numbers are reported even if targets are
 
 ## 2. Open decisions (settle before the phase that needs them)
 
+Settled decisions (D0–D5, D9–D11) are in `Docs/decisions.md`; only these remain.
+
 | ID | Decision | Needed by | Recommendation (not yet agreed) |
 |---|---|---|---|
-| D0 | Repository layout. | Phase 0 | **Decided 2026-11-01:** top-level `backend/` (MVC API), `ml/`, `gateway/`, `frontend/` (`dashboard/`, `extension/`), `Docs/`; `docker-compose.yml` at the repo root. See `Docs/decisions.md`. |
-| D1 | Attack-category labelling rules. | Phase 1 | **Decided 2026-11-02:** ordered rules (malware → brand_impersonation → credential_harvest → spear → unknown), documented in `data_card.md`. See `Docs/decisions.md`. |
-| D2 | What the RQ1 "signature-based baseline" is. Not defined in the proposal. | Phase 3 | **Decided 2026-11-02:** URLs: lookup against a blocklist snapshot (PhishTank/OpenPhish/URLhaus) taken *before* the sample's collection date. Emails: SpamAssassin rule score (rules only, Bayes off). |
-| D3 | How the 175,000 samples split between URLs and emails. | Phase 1 | **Decided 2026-11-02:** largest balanced set available at split time (≈120k expected; 175k not reachable with the public email corpora), each modality 50/50. See `Docs/decisions.md`. |
-| D4 | Grouping key for the split. | Phase 1 | **Decided 2026-11-02:** URLs by registered domain (eTLD+1); emails by sender address (Enron: mailbox owner). See `Docs/decisions.md`. |
-| D5 | One set of six models for both modalities, or separate URL and email models. | Phase 3 | **Decided 2026-11-02:** separate per modality (the features and the text inputs are different), still six model *types*. |
 | D6 | Visual-similarity check in the extension (promised in Gap 3 / Table 2.3, but no feature or model covers it). | Phase 7 | Perceptual-hash comparison of a page screenshot / favicon against a small set of fictional and protected brand references, used as a warning signal, outside the 140 features. Or drop it and state it as a limitation. |
 | D7 | How `ti_score` is obtained for the training data. Free VirusTotal limits make 175k lookups impossible, and URLs taken *from* PhishTank are likely to be in TI feeds already (circular). | Phase 4 | **Decided 2026-11-02:** record TI responses at collection time only; compute `ti_score` for a stratified subset that fits the API limits; run RQ2 on that subset; discuss the circularity as a threat to validity. Check current API limits in each provider's docs. |
 | D8 | Start date, so the 24-week timeline has real dates. | Phase 0 | Fill in Section 5. |
-| D9 | **Decided 2026-11-02: option (a).** The proposal says phishing URLs cover 2021–2026, but the free feeds list only URLs online *now* — **confirmed 2026-11-02**: PhishTank's developer page says its files contain "only online phishes"; OpenPhish's free feed has no archive (its 30-day archive needs the Academic Use Program). Option (a): keep the sources and reword to "collected from <start date> onward"; (b): add an archived phishing-URL dataset (changes the fixed source list). | Before step 8 of Phase 1 (split) | (a). Finding 2026-11-02: PhishTank submission dates already span 2021–2026 (see `Docs/decisions.md`). |
-| D10 | **Decided 2026-11-02: (a) + (c).** Legitimate URLs from Tranco are home pages only; phishing URLs have paths, so URL shape alone separates the classes. | Before step 8 of Phase 1 (split) | (a) add same-site links from Tranco pages during snapshotting, plus (c) report URL results with and without path features. See `Docs/decisions.md`. |
-| D11 | Live URL scanning without the API fetching pages (evidence collector, two stages, deployed feature set, rebinding fix). | Phase 5 | Agreed 2026-11-05: D11a–D11f as recommended in `Docs/live_url_scanning.md` section 8. |
 
 ---
 
@@ -96,70 +89,8 @@ Targets: accuracy > 95%, FPR < 5%. Real numbers are reported even if targets are
 
 ## 4. Phases
 
-### Phase 0 — Environment, repository and skeleton (weeks 1–2)
-
-**Goal:** a repository anyone can clone and run `make test` / `make lint` on.
-
-**Build:**
-- Repo layout (D0):
-  ```
-  backend/    pyproject.toml Dockerfile README.md
-              phishguard/  core/ models/ schemas/ views/ controllers/
-                           services/{features,ml,intel,simulation}/ db/ workers/
-              tests/       unit/ integration/
-  ml/         data/ training/ evaluation/ notebooks/
-  gateway/
-  frontend/   dashboard/ extension/
-  data/       raw/ snapshots/ processed/ splits/      (gitignored)
-  Docs/       CLAUDE.md IMPLEMENTATION_PLAN.md features.md data_card.md decisions.md devlog/
-  docker-compose.yml  Makefile  .env.example  .gitignore  PROGRESS.md  README.md
-  ```
-- `backend/pyproject.toml` (Python 3.11, ruff, pytest config).
-- `docker-compose.yml`: `api`, `postgres:16`, `redis`. The `snapshot` collector is added in Phase 1 and the Celery `worker` in Phase 5, when their code exists.
-- `Makefile`: `test`, `lint`, `format`, `up`, `down`.
-- `.gitignore` covering `data/`, `.env`, model artefacts, `node_modules/`.
-- `Docs/features.md`: F1–F140 copied exactly from Appendix A (ID, name, group, description, same order).
-- `Docs/decisions.md`, `Docs/data_card.md` (empty template), `Docs/devlog/` (AI-assistance log, required by the proposal's ethics section).
-- `PROGRESS.md` with the format from `CLAUDE.md`.
-- Start the university ethics-approval request now (simulations in Phase 6 depend on it).
-
-**Acceptance checks:**
-- `make lint` and `make test` pass on a clean clone (one smoke test).
-- `docker compose up` starts Postgres and Redis healthy.
-- `Docs/features.md` has exactly 140 rows, F1…F140, names identical to Appendix A (a test checks this).
-- `GET /health` returns 200 through the view → controller → schema path (MVC smoke test).
-
-**Prompt:**
-> Phase 0. Read CLAUDE.md and docs/IMPLEMENTATION_PLAN.md. Propose the files for the repo skeleton (layout per decision D0), pyproject, Makefile, docker-compose, .env.example, and docs/features.md from Appendix A. Wait for my OK, then build it in small steps.
-
----
-
-### Phase 1 — Data acquisition, cleaning and split (weeks 3–5)
-
-**Goal:** a balanced, de-duplicated, stratified dataset and a fixed split. **Serves:** RQ1–RQ3.
-
-**Build (`ml/data/`):**
-- Downloaders: PhishTank, OpenPhish, Tranco, Nazario, SpamAssassin public corpus, Enron. Each stores raw files under `data/raw/<source>/<date>/` with a manifest (URL, date, checksum).
-- Snapshot collector (container `snapshot`): for each URL fetches HTML, WHOIS, DNS and TLS details **at collection time** with plain GET and size/time limits, stored under `data/snapshots/`. Phishing pages die in hours, so later fetching is not possible.
-- Common record format: `sample_id, sample_type (url|email), raw_content, label, attack_category, source, source_date, collected_at, group_key, content_hash, snapshot_ref`.
-- Cleaning: normalise URLs, parse emails, drop broken entries, de-duplicate by hash of normalised URL / email body.
-- Email age-gap handling (proposal §3.6.1): normaliser for dates/years in headers and body and X-Mailer names, applied before feature extraction and text-model training.
-- Attack-category labeller (D1).
-- Sampler: 175,000 samples, 50/50, stratified by category (D3 for the URL/email mix).
-- Splitter: seed 42, grouped by `group_key` (D4), 15% locked test / 85% development; 5-fold stratified group CV fold IDs on development. Split files are written once and hashed; a test fails if they change.
-- Monthly collector: new phishing + legitimate URLs with collection date, stored by month for RQ3. Never alters the locked test set.
-- Recent legitimate-email check set: script to load my own exported mailbox samples (personal content removed) as an **evaluation-only** set.
-- `docs/data_card.md`: sources, licences, counts per source/category/label, date ranges, missing-snapshot rates, known biases (email age gap).
-
-**Acceptance checks:**
-- Final counts match the target and the 50/50 balance; per-category counts in the data card.
-- No `group_key` appears on both sides of the split; no `content_hash` appears twice.
-- Test set ≈ 15%, CV folds stratified; split is reproducible from seed 42.
-- Monthly collector runs as a scheduled job and writes a dated batch.
-- Tests run offline against small fixture files.
-
-**Prompt:**
-> Phase 1. Decisions D1, D3, D4 are now: <...>. Propose the data pipeline modules, the record schema and the snapshot collector design. First tell me exactly which fields each source provides and how I can verify them.
+Phases 0 and 1 are Done and their build instructions were removed on 2026-11-06. Results and
+acceptance checks: `PROGRESS.md`; the old text: git history.
 
 ---
 

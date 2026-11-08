@@ -123,3 +123,38 @@ def test_training_and_live_paths_give_the_same_140_values(isolated_data_dir):
     assert all(
         (math.isnan(a) and math.isnan(b)) or a == b for a, b in zip(training, api, strict=True)
     )
+
+
+def test_scan_path_gives_the_training_features_and_thresholds(isolated_data_dir):
+    """Phase 2 and 5 acceptance: the API's own function, on what the collector would send."""
+    import base64
+    from datetime import datetime
+
+    from phishguard.services.inference.service import BLOCK, WARN, url_values
+    from phishguard_ml.training import ensembles
+
+    assert (WARN, BLOCK) == (ensembles.WARN, ensembles.BLOCK)
+    record = _snapshot(
+        isolated_data_dir,
+        SampleRecord.create(
+            source=Source.PHISHTANK, raw_content="http://login.paypa1-secure.com/a", collected_at=T
+        ),
+        "<html><title>PayPal</title><form><input type=password></form></html>",
+    )
+    folder = isolated_data_dir / record.snapshot_ref
+    answer = {
+        "meta": json.loads((folder / "meta.json").read_text()),
+        "page_b64": base64.b64encode((folder / "page.html").read_bytes()).decode(),
+        "dns": json.loads((folder / "dns.json").read_text()),
+        "tls": json.loads((folder / "tls.json").read_text()),
+    }
+    # the collector answer format and the batch path, both without RDAP or ranks as served
+    api = url_values(
+        record.raw_content, answer, datetime.fromisoformat("2026-11-02T00:00:00+00:00")
+    )
+    stored, _ = matrix.url_evidence(record)
+    training = backend_extractor.url_features(stored, {})
+    assert len(api) == 140
+    assert all(
+        (math.isnan(a) and math.isnan(b)) or a == b for a, b in zip(training, api, strict=True)
+    )

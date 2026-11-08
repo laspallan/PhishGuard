@@ -5,138 +5,35 @@ Status of each phase. A phase is marked Done only after every acceptance check i
 
 ## Phase 0 — Environment, repository and skeleton
 
-**Status:** Done (verified 2026-11-02)
+**Status:** Done (verified 2026-11-02; details in git history).
 
-**What was built:**
-- Root: `.gitignore`, `.gitattributes` (LF line endings), `.env.example`,
-  `docker-compose.yml` (postgres, redis, api), `Makefile`, `README.md`, `PROGRESS.md`.
-- `backend/`: MVC package `phishguard` (`core/`, `models/`, `schemas/`, `views/`,
-  `controllers/`, `services/{features,ml,intel,simulation}/`, `db/`, `workers/`),
-  `GET /health`, `Dockerfile` (non-root user), `README.md`, tests.
-- `frontend/dashboard/`: React + Vite + TypeScript + Tailwind, feature folders (`overview`,
-  `detections`, `campaigns`, `models`, `experiments`, `threat-intel`, `settings`, `auth`),
-  `shared/` (layout, sidebar, page header, API client, types), tests.
-- `frontend/extension/`, `ml/`, `gateway/`: folders and READMEs (code comes in later phases).
-- `Docs/`: `features.md` (generated from Appendix A), `decisions.md`, `data_card.md`
-  template, `devlog/`.
-
-**How to run:** see `README.md` (quick start) and each module README.
-
-**Acceptance checks (verified 2026-11-02):**
-- [x] `make lint` and `make test` pass on a clean clone — fresh `git clone` of commit
-  `dacbc75`, `make install`, then `make test`: backend 6 passed, dashboard 8 passed;
-  `make lint`: ruff "All checks passed!", "23 files already formatted", `tsc` clean. Exit 0.
-- [x] `docker compose up` starts Postgres and Redis healthy — `make up`: postgres (healthy),
-  redis (healthy), api up; `pg_isready` "accepting connections"; `redis-cli ping` "PONG".
-- [x] `Docs/features.md` has exactly 140 rows, F1…F140, names as in Appendix A —
-  `test_feature_catalogue.py` (4 tests) passed.
-- [x] `GET /health` returns 200 through view → controller → schema — HTTP 200 from the
-  container: `{"status":"ok","app_name":"PhishGuard API","version":"0.1.0","environment":"development"}`;
-  API runs as `appuser` (non-root).
-- [x] Dashboard feature import rule enforced — `structure.test.ts` passed, and was shown to
-  fail on a deliberate cross-feature import.
-
-**Carried forward (your action, not a code check):**
-- [ ] Send the university ethics-approval request. Needed before Phase 6 (simulations).
-
-**Known issues:**
-- pytest prints a Starlette deprecation warning recommending `httpx2` for the TestClient;
-  harmless for now, to be checked before switching.
-- npm did not run esbuild's install script (npm `allowScripts`); build and tests still work.
-- Local `.env` was created from `.env.example` with a random Postgres password (gitignored).
-
-**Decisions made:** D0 layout, backend MVC, `models/` = DB tables only, installable
-`phishguard` package, feature-based dashboard, LF line endings (see `Docs/decisions.md`).
-
-**Next phase needs to know:** decisions D1 (category labelling), D3 (URL/email split) and
-D4 (grouping key, the Enron problem) must be settled before Phase 1 starts. The `snapshot`
-collector service is added to `docker-compose.yml` in Phase 1.
+**Carried forward (your action):** send the university ethics-approval request. Needed before
+Phase 6 is tested on people. Draft written 2026-11-07, **not sent**: `Docs/ethics_request.md`.
 
 ## Phase 1 — Data and split
 
-**Status:** In progress — all code built and tested (2026-11-02); the real split is not made yet.
-**Decided 2026-11-02 (you accepted the recommendations):** D3 = largest balanced set at split
-time (≈120k, report the gap to 175k); D9 = option (a); D10 = (a) one same-site page per Tranco
-home page, built into the snapshot collector, + (c) path-free URL results in Phase 3;
-snapshots of the real URLs approved and **started 2026-11-02** (phishing first).
+**Status:** Done (verified 2026-11-05; build details in git history).
 
-**Remaining, in this order** (the snapshot run rewrites `records.parquet` when it ends, so
-`build` must not run while it is running):
-1. ~~Snapshot runs~~ **done 2026-11-02** (both passes exit 0, 10:05): 101,313 URL records
-   have snapshots (all 51,592 phishing), and 16,213 same-site legitimate link pages (D10a)
-   were added.
-2. RDAP run finishes (`python -m phishguard_ml rdap`, registries only; re-run once to retry
-   HTTP 429s). Missing data (no RDAP server / HTTP 403) is kept as missing — see decisions.
-3. ~~Enron download~~ **done 2026-11-02**: 443 MB (the page says "about 1.7Gb"; the file is complete: gzip check OK,
-   520,743 files from 150 mailboxes, as the page describes); 10% received-mail sample = 20,346 emails. `build` re-run with
-   Enron: 183,931 records after de-duplication.
-4. `build` (now with Enron) → both snapshot passes again (fetch nothing old, restore the D10
-   pages) → `label` → `count` → `datacard`.
-5. `split --n-url <2 × phishing URLs> --n-email <2 × phishing emails>` (D3) → `verify-split`.
-6. Start the daily collector: `docker compose --profile collect up -d collector`.
-7. Re-check every acceptance check below on the real data, then mark Phase 1 Done.
+**Acceptance checks (re-checked on the real data 2026-11-05):**
+- [x] Final counts and 50/50, per-category counts in the data card: 122,042 samples, the largest
+  balanced set (D3 replaces the 175,000 target; the gap is reported) — URL 51,592 / 51,592,
+  email 9,429 / 9,429; categories and the split are in `Docs/data_card.md`
+- [x] No group_key on both sides of the split (0 of all groups in more than one part); no
+  content_hash twice (0)
+- [x] Test ≈ 15% (15.0%; URL 15.0%, email 14.8%, every category 14.2–16.7%), 5 stratified
+  folds, reproducible from seed 42 (sampling and split rebuilt in memory: identical)
+- [x] Collector runs as a scheduled job and writes a dated batch: `collector` container up
+  (restart unless-stopped, every 24 h); first batch `monthly/2026-11/2026-11-05.parquet`,
+  679 new samples, none in the split
+- [x] Tests run offline against small fixture files — 158 ml tests, network mocked
 
-**Steps:**
-- [x] 1. `ml/` package, paths, `SampleRecord` (UUID v5 ids), Parquet read/write
-- [x] 2. Downloaders + manifests (`download.py`); formats verified on the source pages and on
-  the real files. Downloaded 2026-11-02: PhishTank, OpenPhish, Tranco (list V354N), Nazario,
-  SpamAssassin, Enron (443 MB, complete).
-- [x] 3. Parsing (`parse.py`) and cleaning (`clean.py`): URL normalisation, registered domain,
-  email parsing, D4 group keys, de-duplication (phishing copy wins a label conflict)
-- [x] 4. Email time-clue normaliser (`email_normalise.py`)
-- [x] 5. Snapshot collector (`snapshot.py`, `ml/Dockerfile`, compose `snapshot` service).
-  Checked in the container on 5 legitimate Tranco sites: 3 full snapshots, 1 does not resolve,
-  1 connect timeout — all recorded. **Not yet run on phishing URLs** (your go needed).
-- [x] 6. Category labeller (`label.py`, D1), shared word lists in
-  `backend/phishguard/services/features/lexicons.py`
-- [x] 7. Counting (`pipeline.count`): see the data card. **Stop: you choose n_url / n_email.**
-- [x] 8. Sampling, grouped split, 5 folds, hashes, never-overwrite (`split.py`) — tested on
-  synthetic data; **real split not made** (waits for D3, D9, D10, Enron, snapshots)
-- [x] 9. Daily collector (`collect.py`, compose `collector` service), own-mailbox loader
-- [x] 10. `Docs/data_card.md` generated from pipeline outputs (`datacard.py`)
-
-**Real numbers (build 2026-11-02, without Enron):** 165,123 records after de-duplication —
-URLs 51,592 phishing / 99,994 legitimate; emails 9,429 phishing / 4,108 legitimate. Largest
-balanced set today: 103,184 URLs + 8,216 emails = 111,400 (< 175,000; Enron will add
-legitimate emails, so emails can reach about 18,858).
-
-**Acceptance checks:**
-- [ ] Final counts match 175,000 and 50/50, per-category counts in the data card — *not yet*:
-  only 111,400 balanced samples are possible today (see D3 below); categories are in the card
-- [x] No group_key on both sides of the split; no content_hash twice — `test_split.py`,
-  `test_clean.py` (synthetic data; to re-check on the real split)
-- [x] Test ≈ 15%, folds stratified, reproducible from seed 42 — `test_split.py`
-- [ ] Monthly collector runs as a scheduled job and writes a dated batch — code and test pass
-  (`test_pipeline.py`); **not yet started live** in the container
-- [x] Tests run offline against small fixture files — 101 ml tests, network mocked
-
-**Test results (2026-11-02):** `make test` backend 25, ml 101, dashboard 8 passed;
-`make test-db` 1 passed; `make lint` clean; `docker compose config` valid.
-
-**Known issues:**
-- The first two snapshot passes stopped on single malformed URLs (`httpx.InvalidURL` from a
-  redirect; `Invalid IPv6 URL` from a page link). Fixed: both are recorded per URL, and any
-  unexpected error for one URL is written to its `meta.json` instead of stopping the run.
-  Regression tests added; finished snapshots were kept (resume).
-- After snapshots, URL categories are still mostly `unknown` (46,731 of 51,592): most live
-  phishing pages show no form without JavaScript, or were already taken down (see
-  `Docs/decisions.md`, 2026-11-02 finding). **You decided:** PhishTank's `target` field now also
-  marks brand impersonation (D1 extended, tests added).
-- One snapshot had an empty `meta.json` from a stopped run; writes are now atomic and the
-  URL was re-fetched (regression tests added).
-- Legitimate URLs with snapshots: 49,721 (incl. 16,213 link pages), slightly fewer than the
-  51,592 phishing URLs. **You decided:** add 3,000 more Tranco sites — **done 2026-11-02**:
-  +3,000 home pages and 1,379 link pages; legitimate URLs with snapshots now 54,100.
-- 1 of 5 Tranco check sites timed out (facebook.com) from the container.
-- `data/snapshot_check/` (5 test snapshots) can be deleted by hand; my delete was blocked.
-
-**Approved choices:** Parquet; httpx, tldextract (offline PSL), dnspython, ssl, RDAP,
-StratifiedGroupKFold; `ml/` as its own package; collector as a compose service.
+**RDAP stopped 2026-11-05 (you decided):** 105,445 of 108,480 domains answered; the rest
+(registry refusals, rate limits, .au / .pl / .ar not reached) stay missing.
 
 ## Phase 2 — Feature extractor F1–F140
 
-**Status:** In progress (started 2026-11-02, built alongside the end of Phase 1; uses no real
-split data, only hand-made test examples).
+**Status:** Done (verified 2026-11-06; all four acceptance checks below, plus `make test` and
+`make lint` in all five modules).
 **Decided 2026-11-02:** P2-a…P2-f (missing = NaN, modality columns, Tranco leakage reported,
 external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `Docs/decisions.md`.
 
@@ -159,13 +56,30 @@ external dated lists, RDAP/Authentication-Results sources, NLP libraries) — `D
   `ml/phishguard_ml/features/matrix.py` + `features` command — counts unreadable pages in its
   report. Parallel build checked on real emails (400 in 7 s). **Real run waits for:** RDAP end,
   `label`, and your Defender decision (it reads all 51,592 phishing pages)
-- [ ] Missing-value rate per feature in the data card
+- [x] Missing-value rate per feature in the data card (per class, own modality, split dataset;
+  `datacard.missing_rates`, 1 test) — 2026-11-05
+- [x] **Real feature table built 2026-11-05** (`features.parquet`, hash `50d7055b…`): 169,178
+  URL + 32,345 email rows, pages ok 85,944 / none 83,234 / unreadable 0, ~50 min on 10 workers.
 
-**Blocker (your decision):** Microsoft Defender flags stored phishing pages when they are read
-(first: `Trojan:HTML/Phish.HNAY!MTB` on one `page.html`, 2026-11-02 22:53). Building the feature
-matrix reads all 51,592 phishing pages, so Defender would block/quarantine many and silently
-shrink the dataset. **Decided 2026-11-03:** you add a Defender exclusion for
-`D:\PhishGuard\data` (admin, your action) and restore the quarantined page.
+**Acceptance checks (2026-11-05):**
+- [x] Output names and order equal `Docs/features.md` — `test_feature_catalogue.py`,
+  `test_extractor.py` and one test per feature group
+- [x] Every feature has a unit test with a hand-checked example — per group tests above
+- [x] Training path and API path call the same function (closed 2026-11-06) — training:
+  `test_uses_the_backend_extractor`; API: `test_scan_path_gives_the_training_features_and_thresholds`
+  runs the API's own `url_values` on a collector answer. `services/evidence.py`
+  (`build_url_evidence`) is the only way stored or collected evidence becomes `UrlEvidence`
+  (3,000 real records recomputed: 0 differences; feature hash unchanged).
+- [x] Missing-value rate per feature in the data card
+
+**Findings from the missing-value rates (class gaps of 10+ points):** email header features
+(Received chain, Return-Path, SPF / DKIM / DMARC) are missing for 83–100% of legitimate emails
+(Enron has no delivery headers) — all 20 are outside the headline `no_header` set. URL page
+features: most are missing for 16.9% of phishing and 20.3% of legitimate URLs (no page), but the
+link-based ones (F84 external_link_ratio, F85 null_link_ratio) are missing for 64.6% of phishing vs
+32.1% of legitimate URLs (no page with links: phishing pages are often takedown or redirect
+pages), so missingness carries class information; Phase 3 should also report URL results on
+samples with a page.
 
 **Decided 2026-11-02:** URLhaus only in the D2 blocklist baseline (removed from labelling and
 `ti_score`); F65 always missing.
@@ -185,22 +99,50 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   threshold for a target FPR) — 7 tests, values by hand
 - [x] 3. `training/ensembles.py`: soft voting, cross-fitted LR stacker on raw OOF log-odds,
   0.60 / 0.90 decisions, cascade rule — 5 tests
-- [ ] 4. Text models: LSTM, 1D-CNN (PyTorch, CPU); DistilBERT script for Colab — **blocked:** PyTorch 2.14.1
-  fails to load (`WinError 1114`, `c10.dll`) because the venv's base Python is the copy bundled
-  with ZKBioTime (`C:\ZKBioTime\Python311`), which ships 2018 C++ runtime DLLs (msvcp140
-  14.16, ucrtbase 10.0.17134) that Windows loads before the current system ones (14.44).
-  Your action: install standard Python 3.11 from python.org and rebuild the venv (commands in
-  the chat). torch was uninstalled again; nothing in ZKBioTime was changed.
-- [ ] 5. Cascade (tabular first, DistilBERT for scores in [0.30, 0.80]) and CPU latency
+- [x] 4. Text models built 2026-11-06, not yet trained on real data: `training/text_train.py` (LSTM,
+  CNN), `ml/train_text_queue.ps1`, `services/text_input.py`, `ml/colab/train_distilbert.py`,
+  `training/text_colab.py` (`text-export`, `text-import`). 18+ tests in `test_text_models.py`, run in
+  `ml/.venv-text` (`make test-text`): they are skipped in `backend/.venv`, which cannot load PyTorch.
+  The Colab script ran end to end with a tiny DistilBERT, not the real one and not on a GPU.
+  `ml/.venv-text` (uv Python 3.11.18, torch 2.15.0+cpu; not in git): ZKBioTime sets `PYTHONHOME`
+  machine-wide, so run it with that cleared. Dataset names are hidden from the email text
+  (decisions.md).
+  **Timing, 2026-11-06, measured with the tabular queue using the CPU** (small samples, scaled to 15
+  trainings of about 6 epochs each, so rough upper estimates). CNN: email about 6 h, full URL about
+  14 h: feasible, and `ml/train_text_queue.ps1` now runs the CNN only, chained after the tabular queue.
+  LSTM, at 1, 2 and 4 threads: full URL 342–429 h, email 592–1,183 h; more threads did not help. Even
+  several times faster on a free CPU that is too slow, so the LSTM runs on Colab (you decided,
+  2026-11-06). `ml/colab/train_lstm.py` is built: on a CPU it gives exactly the same predictions as
+  `text_train.py`, and it searches the same space (tests). It keeps every finished trial and fold, and
+  `text-import` registers the result like any other text model. Checked on 300 real rows on CPU; **not
+  yet run on a GPU or on all rows, so its GPU time is unknown.** The three exports are ready in
+  `data/colab/`. The real exports found lone surrogates in some emails, now replaced in `email_text`.
+  **LSTM email/text_body trained on a Colab GPU 2026-11-06:** 16,065 rows, about 26 min, OOF log loss
+  0.0761 (fold 0 was used to choose the settings; the other four average about 0.080). URL text_host
+  trained on Colab 2026-11-07, about 32 min. URL text_full stopped at 3 of 10 trials (Colab limit);
+  resuming draws the remaining trials with a different seed.
+- [ ] 5. Cascade: the rule, the report row and `evaluation/latency.py` are built and tested; the
+  real row and the CPU latency need DistilBERT from Colab (your action)
 - [x] 6. Signature baseline (D2): `evaluation/baseline.py` + `ml/spamassassin/` container
   (SpamAssassin 4.0.1, Bayes off, no network), rows in the results table; URL baseline only in
-  RQ3 (you decided). 3 tests + end-to-end; smoke test on 300 real emails passed
+  RQ3 (you decided). 3 tests + end-to-end; smoke test on 300 real emails passed.
+  **Full run 2026-11-08:** all 16,065 development emails scored (379 min), 4,311 detected;
+  `results.md` rebuilt. Development: SpamAssassin accuracy 0.7637, recall 0.5321, FPR 0.0046
+  [0.0021, 0.0084]; soft vote no_header accuracy 0.9501, recall 0.9365, FPR 0.0364 [0.0301, 0.0437];
+  McNemar p < 0.0001. The baseline has the **lower** false-positive rate.
 - [x] 7. `training/registry.py` (final model + calibrator on all development rows, version id,
   hashes, `registry.json`), `evaluation/shap_report.py` (TreeExplainer, mean |SHAP|),
   `evaluation/report.py` (CV table per modality / feature set, ensembles, CIs, ECE, FPR at
   0.60 / 0.90, FPR per legitimate source, McNemar vs soft vote); `train` and `report`
   commands — end-to-end test on synthetic data
-- [ ] 8. Real runs once the split exists
+- [ ] 8. Real runs (started 2026-11-05; you chose 50 trials for every run). Queue:
+  `ml/train_queue.ps1`, safe to re-run: `train --resume` skips models already complete with the
+  same feature code, split, trial count and seed (a crash costs at most the model in progress).
+  Order: email/no_header, url/all, email/all, url/no_path, url/no_tranco, url/no_rdap, then
+  url/live (M2), url/live_stage1 (M1) and email/no_age when the queue is re-run after the first
+  pass; 3 models each (random forest, XGBoost, LightGBM). url/all and email/all are done too.
+  **email/no_header done** in 2 h 49 min, OOF log loss:
+  RF 0.1586, XGBoost 0.1316, LightGBM 0.1305. First url/all attempt lost to battery shutdowns.
 
 ## Phase 4 — Threat-intelligence service and RQ2
 
@@ -208,9 +150,12 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
 - [x] VirusTotal (read-only, never submits URLs) and AlienVault OTX clients; async rate limits
   (VirusTotal public: 4/min, 500/day); cache (Redis or bounded memory, errors not cached);
   offline recorder of raw responses with timestamps — tests offline (mocked HTTP)
-- [ ] **Your decision:** the `ti_score` formula (`services/intel/scoring.py` has unagreed
-  weights) and the size of the D7 subset; check OTX field names on one real response
-- [ ] Record TI responses for the subset; RQ2 with / without `ti_score` (CIs, McNemar)
+- [x] `ti_score` formula and D7 subset agreed 2026-11-08 (`Docs/decisions.md`, RQ2) and built:
+  `scoring.py`, `training/rq2.py`, commands `ti-record [--daily]` and `rq2`; tests offline
+  (`test_intel.py` 13, `test_rq2.py` 6). Still to check on the first real answers: OTX
+  `pulse_info.count`, and the VirusTotal engine names for PhishTank and OpenPhish.
+- [ ] Record TI responses for the subset (8 days of `ti-record --daily`, needs the keys and the PC
+  awake); then `rq2` (needs the `url/live` models)
 - [ ] Your action: free VirusTotal and OTX keys in `.env`
 
 ## Phase 5 — Backend API and database
@@ -245,9 +190,52 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
 answer 503 until a trained model is wired in (no placeholder verdicts); model registry reader;
 real feature-parity check (`feature_code_hash`); Celery app skeleton.
 
-**Still open in Phase 5:** live scoring with registered models (needs Phase 3 training),
-collecting live URL evidence (design agreed 2026-11-05, D11, `Docs/live_url_scanning.md`;
-first step: pinned-IP fetching), saving scans to the database, Celery tasks, latency measurement.
+**D11 step 5 built 2026-11-06:** `services/inference/service.py` (two-stage URL flow, email scan,
+D11d and D11e rules), `model_loader.py` (lowest OOF log loss with the current feature hash, checks
+`model_sha256`, refuses paths outside the models folder), `scan_store.py` (verdict cache 1 h, partial
+5 min; rate limit per API client; a Redis failure does not stop scans), `persist.py` (scan and model
+version; emails as hash and sender domain only; secret-looking URLs without their query). API image
+has the serving libraries at the training versions.
+Tests: `test_scan_service.py` (fake models and collector, every decision path, 23 tests).
+Real check, 201 development emails through `email-no_header-lightgbm-2b4912be3f97`: legitimate 100
+allow; phishing 91 block, 10 warn. Latency median 569 ms, p95 995 ms with training using the CPU.
+These emails are ones the final model was refit on, so this shows the serving path works, not how
+good the model is.
+
+**Added 2026-11-06:** explanations (SHAP values from XGBoost and LightGBM; random forests give none)
+in the answer and in `scans.top_features`; `test_scan_persistence.py` on real Postgres; read-only
+admin endpoints for the dashboard (`test_admin_api.py`); `choose-band` command.
+
+**Still open in Phase 5 (D11):**
+- Real URL scans: M1 and M2 are not trained yet, so URL scans answer 503. After they are: run
+  `choose-band` and set the band (0.15–0.85 is provisional), rebuild the evidence-collector image
+  (task signature changed), measure p95 latency.
+- End-to-end test with the extension and the gateway (D11 step 6).
+- `ti_score` is None (Phase 4).
+- ~~Redis is still published on 127.0.0.1:6379~~ Closed 2026-11-08: not published in
+  `docker-compose.yml`; `docker-compose.dev.yml` publishes it on 127.0.0.1 only for host runs.
+  Checked: port closed on the host, `redis-cli ping` inside the container answers.
+
+**D11 step 4 code done 2026-11-06:** feature sets `live` (M2, 84 features) and `live_stage1` (M1, 48
+features) in `training/devdata.py`, without F55 too (decisions.md), with behaviour tests. Both are in
+`ml/train_queue.ps1`.
+
+**D11 step 3 done 2026-11-06:** evidence collector `ml/phishguard_ml/data/evidence_worker.py`
+(Celery task on queue `evidence`; stage 1 DNS only, stage 2 + page and TLS; one 6 s deadline, late
+parts listed in `late`; refuses stage 2 for secret-looking URLs and runs only in its container),
+API side `services/inference/evidence_client.py` (late or failed = None, never an error), compose
+service `evidence-collector` (`--profile live`: own network with Redis and API only, no volume,
+read-only file system, no secrets). Test `test_no_target_contact.py` fails if a service outside
+`intel/` can open a connection. Real check through Redis: example.com stage 1 2.7 s, stage 2 0.9 s
+(page, verified TLS); 169.254.169.254 and 127.0.0.1 refused; token URL refused; unresolvable host
+gets DNS only; in the container Postgres is unreachable, writes fail, uid 1000, no /data.
+Redis is no longer published (closed 2026-11-08, see above).
+
+**D11f done 2026-11-05:** the snapshot collector connects only to the address it has just
+checked (`PinnedBackend` / `PinnedTransport` for HTTP, `_connect_checked` for TLS; SNI and
+certificate checks still use the host name; `trust_env=False` so no proxy bypasses it). 6 new
+offline tests (rebinding, pinned IP for HTTP and TLS, wiring guard); ml 153 passed, lint clean.
+Stored snapshots are unchanged.
 
 **Removed 2026-11-04 (you decided):** the duplicate / placeholder files from bf4574d —
 `simulation/gophish.py`, `gophish_client.py`, `templates.py`, `events.py` (duplicated
@@ -255,14 +243,93 @@ first step: pinned-IP fetching), saving scans to the database, Celery tasks, lat
 `rq2.py`, `transformer.py`, and the extension's empty content script. Their work stays in the
 plan (Phases 3, 4, 5, 6).
 
+## Phase 6 — Simulation module, feedback loop and RQ3 harness
+
+**Status:** In progress. Built and tested 2026-11-06 without anyone being contacted. **Cannot be used
+on people until the university approves.**
+- [x] `services/simulation/gophish.py` (endpoints checked against the docs and the source) and
+  `campaigns.py` (launch rules, event store, failed-simulation samples); `training/rq3.py`
+  (arms A, B, C, CIs, McNemar, promotion rule); `gophish` compose service (`--profile simulate`)
+
+**Acceptance checks:**
+- [x] No simulation sample can enter the locked test set — `test_a_simulation_sample_can_never_be_in_the_locked_test_set`,
+  `test_there_is_no_way_to_mark_a_sample_for_the_locked_test_set`
+- [x] B and C get the same number of new samples and the same label balance — `test_b_and_c_have_the_same_size_and_label_balance_and_a_is_static`
+- [x] No credential value stored — `test_a_submitted_value_reaches_neither_database_nor_logs`, and a real
+  form submitted to real GoPhish 0.12.1 in a local container (no email could leave): the password
+  did not reach GoPhish, and "Submitted Data" was still recorded
+- [x] Harness runs end to end on replayed months with fake samples — `test_a_round_runs_end_to_end_on_replayed_months`
+
+**2026-11-07:** you approved going ahead with RQ3. This does not replace the university's approval:
+`PHISHGUARD_ETHICS_APPROVAL_REF` stays empty and no campaign can launch.
+
+**Added 2026-11-08:** the launch code creates the explanation page (`debrief.py`) for every campaign,
+so no other landing page can be used, and refuses without `PHISHGUARD_SIMULATION_CONTACT_EMAIL`.
+Campaign-management endpoints under `/admin/simulation` (templates, participants and withdrawal,
+campaigns, launch, sync, complete), behind the API key; answers never name a participant.
+Tests: `test_simulation.py`, `test_simulation_api.py` (GoPhish faked); backend 204 passed.
+
+**Added 2026-11-08 (later):** read-only lists `GET /admin/simulation/templates`, `/participants` (by
+code only, never the address), `/campaigns`; dashboard **Simulation** page (templates, participants
+and withdrawal, draft campaigns, launch, fetch events, complete; launch disabled and explained
+without approval; asks before withdraw, launch and complete; shows the API's reason for a refusal).
+**Real GoPhish 0.12.1 check** (local container, sending profile on a closed port, a `.test` address,
+a test-only approval reference in memory; no email could leave): launch 200; the landing page was the
+explanation page (no form, no outside resources, contact address shown, capture off in GoPhish);
+fetch events saved 1 click; complete set GoPhish to Completed; no answer named the participant. It
+found that GoPhish's own certificate cannot be checked, so `make gophish-cert` and
+`PHISHGUARD_GOPHISH_CA_FILE` were added (decisions.md); rerun through the real client, certificate
+checked. Tests: `test_simulation_api.py` 8 passed; dashboard 23 passed, build clean.
+
+**Not done:** the pre-condition (ethics approval, your action); your approval of the 8 draft
+templates in `Docs/simulation_templates.md` (4 categories × train/holdout, fictional names checked
+against the real-brand list and a web search; not loaded anywhere); loading real monthly data and real simulation samples into `rq3.run_round` (needs
+months of collected data and real samples).
+
 ## Phase 7 — Browser extension and email gateway
 
 **Status:** In progress (skeletons 2026-11-04 in commit bf4574d, fixed after review).
+- [x] Added 2026-11-06: local verdict cache, session rule that stops repeat visits to a blocked URL
+  before they load, "Open once anyway", Firefox manifest keys, fail-open choice recorded in
+  decisions.md. Logic is unit-tested; **not yet loaded in a real browser**.
 - [x] Extension (MV3): settings popup (API address + key), warning page for "block", badge
   for "warn", nothing on errors / 503; `manifest.json` now in `public/` so `dist/` loads;
   pure logic unit-tested (5 tests); in `make lint` / `make test`
 - [x] IMAP gateway: `BODY.PEEK[]` (mail stays unread), last UID per UIDVALIDITY in a state
   file (each email once), stops and retries on API errors / 503, logging, non-root image,
   pinned requirements; 6 offline tests (fake IMAP, mocked API); in `make lint` / `make test`
-- [ ] Visual-similarity check (decision D6); check before page display (declarativeNetRequest)
+- [x] Visual-similarity check (D6, perceptual hash, 2026-11-08): `src/visual.ts` (favicon dHash,
+  8-bit limit, never fetches a favicon from the web), `src/brandHashes.json` from `brand-icons`
+  (29 of 35 brands), wired into `background.ts` as a warn-only badge; `favicon` permission. Tests:
+  extension 18 passed (incl. the same hashes as `test_brand_icons.py`, 3 passed); build clean. Not
+  yet tried in a real browser; no detection rate (no snapshot has a favicon).
+- [x] 2026-11-09, checking before the page is shown (options C + D, you chose): API
+  `GET /extension/blocked-hosts` (hosts only, shared domains left out; `test_extension_api.py` 3
+  passed); extension `src/precheck.ts`, `checking.html`, rules in `background.ts`, `alarms`
+  permission; extension 28 passed, build clean. **First real-browser run** (headless Edge, built
+  extension, API on the host): blocklisted host stopped before loading; first visit through the
+  checking page; second visit straight through. Temporary test rows deleted afterwards.
 - [ ] End-to-end test against a running API with a trained model (after Phase 5)
+
+## Phase 8 — Dashboard, deployment, final evaluation and RQ3 rounds
+
+**Status:** In progress. **The locked test set has not been read.**
+- [x] Dashboard pages on the read-only admin API (overview, detections, campaigns, experiments,
+  models, threat intel, settings; the API key stays in sessionStorage): 18 tests, build passes.
+  Rendered in headless Edge on invented API answers, at desktop and phone width (2026-11-06): no
+  console errors, no sideways scrolling. Not yet seen against a real running API.
+- [x] 2026-11-08: CORS for the dashboard origins only (it could not have reached the API without
+  it; `test_cors.py`); deployment walkthrough `Docs/deployment.md` (settings to simulations, ports,
+  backups); `final-report` also writes `final_results.md`; RQ2's `results.md` now has its own title
+  and names its McNemar reference.
+- [x] `evaluation/final.py`: `final-eval` refuses without `--confirm-models-are-frozen`, logs each
+  access in `data/models/final/locked_test_access.jsonl`, refuses a second run per final model;
+  `final-report` rebuilds every number from the saved predictions. Tested on synthetic data only.
+
+**Acceptance checks:**
+- [ ] One script reproduces every number: built, not yet run on real results
+- [ ] Locked-test access logged, once per final model: guard tested, real run waits for frozen models
+- [ ] Results reported as they are: only possible after the final run
+
+**Not done:** real final evaluation, three RQ3 monthly rounds with 5 seeds each, RQ2 table; the
+walkthrough is written but not yet followed on a clean machine.

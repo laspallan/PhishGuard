@@ -1,9 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App, { menu } from "./App";
+
+beforeEach(() => vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no API in tests"))));
+afterEach(() => vi.unstubAllGlobals());
 
 function renderAt(path: string) {
   return render(

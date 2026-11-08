@@ -7,7 +7,10 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY phishguard ./phishguard
-RUN pip install --no-cache-dir .
+# libgomp1: OpenMP runtime needed by XGBoost and LightGBM.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir ".[serve]"
 
 # Run as a non-root user.
 RUN useradd --create-home appuser

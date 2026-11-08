@@ -49,3 +49,44 @@ export function verdictFrom(status: number, body: unknown): Verdict | null {
 export function blockedPagePath(url: string): string {
   return `blocked.html?url=${encodeURIComponent(url)}`;
 }
+
+export const VERDICT_CACHE_MS = 60 * 60 * 1000; // same hour as the API's verdict cache
+
+export interface CachedVerdict {
+  verdict: Verdict;
+  at: number;
+}
+
+/** A remembered verdict that is still fresh. A repeat visit then needs no API call. */
+export function freshVerdict(
+  cache: Record<string, CachedVerdict>,
+  url: string,
+  now: number,
+): Verdict | null {
+  const entry = cache[url];
+  return entry && now - entry.at < VERDICT_CACHE_MS ? entry.verdict : null;
+}
+
+/**
+ * Session rule that stops a known-blocked URL before it loads. A rule cannot wait for the API, so
+ * the first visit starts loading and is then replaced; only repeat visits are stopped in advance.
+ * Null if the URL holds a character with a special meaning in rule filters.
+ */
+export function blockRule(
+  id: number,
+  url: string,
+): chrome.declarativeNetRequest.Rule | null {
+  if (/[*^|]/.test(url)) return null;
+  return {
+    id,
+    priority: 3, // above the visited-hosts allow rule (precheck.ts, PRIORITY.block)
+    action: {
+      type: "redirect" as chrome.declarativeNetRequest.RuleActionType,
+      redirect: { extensionPath: `/${blockedPagePath(url)}` },
+    },
+    condition: {
+      urlFilter: `|${url}|`,
+      resourceTypes: ["main_frame" as chrome.declarativeNetRequest.ResourceType],
+    },
+  };
+}

@@ -6,10 +6,20 @@ WebExtension Manifest V3 (Chrome / Edge), Phase 7.
 public/manifest.json   copied into dist/ by the build
 public/popup.html      settings: API address and API key (stored in chrome.storage.local)
 public/blocked.html    warning page shown instead of a blocked page
+public/checking.html   the page a first visit to a new host waits on
 src/api.ts             pure logic, unit-tested (src/api.test.ts)
+src/precheck.ts        rules for checking before a page loads, unit-tested (src/precheck.test.ts)
+src/visual.ts          D6 favicon look-alike check, unit-tested (src/visual.test.ts)
+src/brandHashes.json   brand favicon hashes, made by `python -m phishguard_ml brand-icons`
 src/background.ts      service worker: checks each page with POST /scan/url
 src/settings.ts        reads / saves the settings
 ```
+
+Visual-similarity check (D6): when a page has loaded, its favicon is hashed (64-bit difference
+hash) and compared with the brands' own favicons. Within 8 bits of a brand, on a site that is not
+one of that brand's domains, the tab gets the "!" badge and a title naming the brand. It never
+blocks. The favicon is read from a data: URL or the browser's favicon cache (Chrome and Edge,
+`favicon` permission); a favicon address on the web is never fetched.
 
 Behaviour: `block` → the extension's warning page; `warn` → a "!" badge on the tab;
 `allow` → nothing. If the API is unreachable, the key is wrong, or the API has no trained
@@ -28,5 +38,13 @@ Load it: `chrome://extensions` → Developer mode → **Load unpacked** → choo
 open the toolbar popup and enter the API address (default `http://127.0.0.1:8000`) and the
 `PHISHGUARD_API_KEY` from `.env`.
 
-Still open for Phase 7: the visual-similarity check (decision D6), and checking before the
-page is shown (declarativeNetRequest); today the check starts when the tab begins loading.
+Checking before the page is shown (`src/precheck.ts`, decisions.md 2026-11-09):
+- hosts PhishGuard blocked recently (`GET /extension/blocked-hosts`, refreshed every 5 minutes) go to
+  the warning page before they load;
+- a first visit to a host this browser has not visited waits on `checking.html` for at most 2 s;
+  any answer but block opens it, and no answer opens it unchecked for this session;
+- visited hosts are kept in `chrome.storage.local` only, never sent anywhere; form posts are never
+  redirected.
+
+Loaded and tried in headless Edge on 2026-11-09 (blocklist, first and second visit). Still open: a
+Firefox run, the D6 check in a real browser, and the "allow" path with trained URL models.

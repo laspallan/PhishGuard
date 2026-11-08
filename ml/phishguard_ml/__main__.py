@@ -12,15 +12,28 @@ datacard                     step 10: refresh the generated part of Docs/data_ca
 features [--workers N]       Phase 2: F1-F140 for every record -> processed/features.parquet
 train --modality M [--feature-set S] [--models ...] [--trials N]
                              Phase 3: tune, OOF, final model, SHAP -> data/models/
+train-text --modality M --input I [--models ...] [--trials N]
+                             Phase 3: LSTM and CNN (run in ml/.venv-text, PYTHONHOME cleared)
+text-export --modality M --input I
+                             Phase 3: development text for DistilBERT on Colab -> data/colab/
+text-import FOLDER           Phase 3: checks and registers a finished Colab run
+choose-band                  D11: stage-1 band table -> data/models/stage1_band.json
+final-eval --confirm-models-are-frozen
+                             Phase 8: the ONE use of the locked test set
+final-report                 Phase 8: every final number, from the saved predictions
 report                       Phase 3: development results table -> data/models/results.md
 baseline-export              D2: development emails -> data/baseline/dev_emails.mbox
 baseline-import              D2: SpamAssassin scores -> data/models/baseline/ (after the
                              `spamassassin` compose service has run)
+ti-record [--daily]          RQ2: today's VirusTotal and OTX lookups -> data/ti_responses/
+rq2                          RQ2: url/live with and without ti_score -> data/models/rq2/
+brand-icons                  D6: hashes of the brands' own favicons -> frontend/extension/src/
 """
 
 import argparse
 import json
 import sys
+from pathlib import Path
 
 import joblib
 
@@ -58,6 +71,19 @@ def _train(args) -> list[dict]:
     manifest = split.verify_split()
     done = []
     for name in args.models or list(tabular.MODELS):
+        folder = tabular.run_dir(args.modality, args.feature_set, name)
+        if args.resume and tabular.run_is_complete(
+            args.modality,
+            args.feature_set,
+            name,
+            n_trials=args.trials,
+            split_sha256=manifest["sha256"],
+        ):
+            print(f"{name}: already complete, skipped (--resume)")
+            done.append({"model": name, "skipped": True})
+            continue
+        # shap.json marks a finished run: an old one must not vouch for an interrupted new run
+        (folder / "shap.json").unlink(missing_ok=True)
         info = tabular.train_and_save(
             name,
             data,
@@ -67,12 +93,54 @@ def _train(args) -> list[dict]:
             split_sha256=manifest["sha256"],
             progress=lambda n, loss, name=name: print(f"{name} trial {n}: log loss {loss:.4f}"),
         )
-        folder = tabular.run_dir(args.modality, args.feature_set, name)
         entry = registry.fit_final(folder, data)
         model = joblib.load(folder / "model.joblib")
         (folder / "shap.json").write_text(json.dumps(mean_abs_shap(model, data), indent=1))
         done.append({"model": name, "oof_log_loss": info.oof_log_loss, "version": entry["version"]})
     return done
+
+
+def _train_text(args) -> list[dict]:
+    from phishguard.models.enums import Modality
+    from phishguard_ml.training import devdata, text_train
+
+    data = devdata.load_development_text(Modality(args.modality), args.input)
+    manifest = split.verify_split()
+    done = []
+    for name in args.models or list(text_train.MODELS):
+        if args.resume and text_train.run_is_complete(
+            args.modality, args.input, name, n_trials=args.trials, split_sha256=manifest["sha256"]
+        ):
+            print(f"{name}: already complete, skipped (--resume)")
+            done.append({"model": name, "skipped": True})
+            continue
+        info, folder = text_train.train_and_save(
+            name,
+            data,
+            modality=args.modality,
+            text_input=args.input,
+            n_trials=args.trials,
+            split_sha256=manifest["sha256"],
+            progress=lambda n, loss, name=name: print(f"{name} trial {n}: log loss {loss:.4f}"),
+        )
+        entry = text_train.fit_final(folder, data, text_train.TOKENS[args.modality])
+        done.append({"model": name, "oof_log_loss": info.oof_log_loss, "version": entry["version"]})
+    return done
+
+
+def _text_colab(args) -> None:
+    from phishguard.models.enums import Modality
+    from phishguard_ml.training import devdata, text_colab
+
+    manifest = split.verify_split()
+    if args.command == "text-export":
+        data = devdata.load_development_text(Modality(args.modality), args.input)
+        path = text_colab.export(data, args.modality, args.input, manifest["sha256"])
+        print("written", path, len(data.y), "development rows")
+    else:
+        run = json.loads((args.folder / "run.json").read_text())
+        data = devdata.load_development_text(Modality(run["modality"]), run["feature_set"])
+        _print(text_colab.import_run(args.folder, data, manifest["sha256"]))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -111,15 +179,45 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--feature-set", default="all")
     p.add_argument("--models", nargs="*", default=None)
     p.add_argument("--trials", type=int, default=50)
+    p.add_argument(
+        "--resume", action="store_true", help="skip models already complete with these settings"
+    )
+    p = sub.add_parser("train-text")
+    p.add_argument("--modality", choices=["url", "email"], required=True)
+    p.add_argument("--input", required=True, choices=["text_full", "text_host", "text_body"])
+    p.add_argument("--models", nargs="*", default=None)
+    p.add_argument("--trials", type=int, default=10)
+    p.add_argument("--resume", action="store_true")
+    p = sub.add_parser("text-export")
+    p.add_argument("--modality", choices=["url", "email"], required=True)
+    p.add_argument("--input", required=True, choices=["text_full", "text_host", "text_body"])
+    p = sub.add_parser("text-import")
+    p.add_argument("folder", type=Path)
+    sub.add_parser("choose-band", help="stage-1 band table from M1's development predictions")
+    p = sub.add_parser("final-eval", help="the one use of the locked test set (Phase 8)")
+    p.add_argument("--confirm-models-are-frozen", action="store_true")
+    sub.add_parser("final-report", help="every final number, from the saved predictions")
     p = sub.add_parser("report")
+    p.add_argument("--n-boot", type=int, default=1000)
+    p = sub.add_parser("results", help="recompute every reported table from the saved files")
     p.add_argument("--n-boot", type=int, default=1000)
     sub.add_parser("baseline-export")
     sub.add_parser("baseline-import")
+    p = sub.add_parser("ti-record", help="RQ2: today's VirusTotal and OTX lookups -> ti_responses/")
+    p.add_argument("--per-class", type=int, default=250)
+    p.add_argument("--daily", action="store_true", help="keep running, one batch a day")
+    p = sub.add_parser("rq2", help="RQ2: live models with and without ti_score")
+    p.add_argument("--n-boot", type=int, default=1000)
+    sub.add_parser("brand-icons", help="D6: brand favicon hashes -> frontend/extension/src/")
     sub.add_parser("status")
+    p = sub.add_parser("evidence-worker", help="live scan evidence collector (container only)")
+    p.add_argument("--concurrency", type=int, default=8)
     args = parser.parse_args(argv)
+    from phishguard_ml.training.devdata import LockedTestNotConfirmedError
+
     try:
         return _run(args)
-    except NotInSnapshotContainerError as error:
+    except (NotInSnapshotContainerError, LockedTestNotConfirmedError) as error:
         print(f"Refusing: {error}", file=sys.stderr)
         return 2
 
@@ -174,6 +272,10 @@ def _run(args) -> int:
                 _print(collect.collect_once(client))
         else:
             collect.run_forever()
+    elif args.command == "evidence-worker":
+        from phishguard_ml.data import evidence_worker
+
+        evidence_worker.run_worker(args.concurrency)
     elif args.command == "status":
         _print(pipeline.status())
     elif args.command == "datacard":
@@ -185,11 +287,30 @@ def _run(args) -> int:
         _print({k: v for k, v in report.items() if k != "missing_rate_in_own_modality"})
     elif args.command == "train":
         _print(_train(args))
+    elif args.command == "train-text":
+        _print(_train_text(args))
+    elif args.command in ("text-export", "text-import"):
+        _text_colab(args)
+    elif args.command == "choose-band":
+        from phishguard_ml.evaluation import band
+
+        _print(band.choose())
+    elif args.command in ("final-eval", "final-report"):
+        from phishguard_ml.evaluation import final
+
+        if args.command == "final-eval":
+            _print(final.run(confirmed=args.confirm_models_are_frozen))
+        else:
+            _print(final.report())
     elif args.command == "report":
         from phishguard_ml.evaluation import report as results
 
         results.build(n_boot=args.n_boot)
         print("written", results.results_path())
+    elif args.command == "results":
+        from phishguard_ml.evaluation import rebuild
+
+        _print(rebuild.rebuild(n_boot=args.n_boot))
     elif args.command in ("baseline-export", "baseline-import"):
         from phishguard.models.enums import Modality
         from phishguard_ml.evaluation import baseline
@@ -200,7 +321,45 @@ def _run(args) -> int:
             print("written", baseline.export(emails), len(emails), "emails")
         else:
             _print(baseline.import_scores(emails))
+    elif args.command == "ti-record":
+        _ti_record(args)
+    elif args.command == "rq2":
+        from phishguard_ml.training import rq2
+
+        _print(rq2.run(n_boot=args.n_boot))
+    elif args.command == "brand-icons":
+        from phishguard_ml.data import brand_icons
+
+        with brand_icons.make_client() as client:
+            _print(brand_icons.build(client))
     return 0
+
+
+def _ti_record(args) -> None:
+    import time
+
+    from phishguard.core.config import get_settings
+    from phishguard.services.intel.alienvault import AlienVaultOTXClient
+    from phishguard.services.intel.virustotal import VirusTotalClient
+    from phishguard_ml.training import rq2
+
+    settings = get_settings()
+
+    def key(secret):
+        return secret.get_secret_value() if secret else None
+
+    vt = VirusTotalClient(key(settings.virustotal_api_key))
+    otx = AlienVaultOTXClient(key(settings.alienvault_otx_api_key))
+    while True:
+        try:
+            _print(rq2.record_day(vt, otx, per_class=args.per_class))
+        except RuntimeError as error:  # no keys: stop, waiting would not help
+            print(f"Refusing: {error}", file=sys.stderr)
+            raise SystemExit(2) from None
+        if not args.daily:
+            return
+        # Checked every 30 min by the wall clock, so a PC that slept catches up on waking.
+        time.sleep(30 * 60)
 
 
 if __name__ == "__main__":

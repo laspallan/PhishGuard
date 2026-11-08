@@ -135,6 +135,33 @@ def test_collect_keeps_only_new_samples_and_never_touches_the_split(isolated_dat
     assert again["new"] == 0
 
 
+def test_collector_follows_the_wall_clock_and_survives_a_restart(isolated_data_dir, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    runs = []
+    monkeypatch.setattr(collect, "collect_once", lambda client: runs.append(1))
+    start = datetime(2026, 12, 1, 20, 0, tzinfo=UTC)
+    assert collect.run_due(None, start, 24) is True  # never ran: collect now
+    assert collect.run_due(None, start + timedelta(hours=23), 24) is False
+    # A PC that slept through the due time collects at the first check after waking, and the
+    # last run is read from disk, so a restarted container does not collect twice.
+    assert collect.run_due(None, start + timedelta(hours=39), 24) is True
+    assert collect.run_due(None, start + timedelta(hours=40), 24) is False
+    assert len(runs) == 2
+
+
+def test_a_failed_day_still_counts_as_a_run(isolated_data_dir, monkeypatch):
+    from datetime import UTC, datetime
+
+    def fail(client):
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(collect, "collect_once", fail)
+    now = datetime(2026, 12, 1, tzinfo=UTC)
+    assert collect.run_due(None, now, 24) is True
+    assert collect.is_due(now, 24) is False  # retried tomorrow, not every 30 minutes
+
+
 def test_cli_refuses_snapshots_outside_container(isolated_data_dir, monkeypatch, capsys):
     monkeypatch.delenv("PHISHGUARD_IN_SNAPSHOT_CONTAINER", raising=False)
     seed_raw(isolated_data_dir)

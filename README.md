@@ -42,6 +42,9 @@ docker compose up -d --build
 Module details: [backend](backend/README.md), [dashboard](frontend/dashboard/README.md),
 [ml](ml/README.md), [gateway](gateway/README.md), [extension](frontend/extension/README.md).
 
+Full deployment walkthrough (API, live scans, dashboard, extension, gateway, simulations):
+[Docs/deployment.md](Docs/deployment.md).
+
 Build plan and status: [Docs/IMPLEMENTATION_PLAN.md](Docs/IMPLEMENTATION_PLAN.md).
 Progress log: [PROGRESS.md](PROGRESS.md).
 

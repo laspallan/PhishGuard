@@ -91,12 +91,40 @@ def collect_once(
     return report
 
 
-def run_forever(interval_hours: float = 24.0) -> None:
+def state_path():
+    return monthly_dir() / "collect_state.json"
+
+
+def last_run() -> datetime | None:
+    try:
+        return datetime.fromisoformat(json.loads(state_path().read_text())["last_run"])
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def is_due(now: datetime, interval_hours: float) -> bool:
+    last = last_run()
+    return last is None or (now - last).total_seconds() >= interval_hours * 3600
+
+
+def run_due(client: httpx.Client, now: datetime, interval_hours: float) -> bool:
+    """Collect if the last run (kept on disk, so a restart does not repeat it) is old enough."""
+    if not is_due(now, interval_hours):
+        return False
+    try:
+        collect_once(client)
+    except Exception:  # keep collecting tomorrow even if one day fails
+        log.exception("collection failed")
+    state_path().parent.mkdir(parents=True, exist_ok=True)
+    state_path().write_text(json.dumps({"last_run": now.isoformat()}))
+    return True
+
+
+def run_forever(interval_hours: float = 24.0, check_minutes: float = 30.0) -> None:
+    """Checks the wall clock every `check_minutes`. A single 24-hour sleep stops counting while
+    the PC sleeps (Docker's VM is paused), which delayed one collection by about 15 hours."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     with httpx.Client(timeout=httpx.Timeout(30.0, read=300.0), follow_redirects=True) as client:
         while True:
-            try:
-                collect_once(client)
-            except Exception:  # keep collecting tomorrow even if one day fails
-                log.exception("collection failed")
-            time.sleep(interval_hours * 3600)
+            run_due(client, datetime.now(UTC), interval_hours)
+            time.sleep(check_minutes * 60)

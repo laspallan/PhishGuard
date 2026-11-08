@@ -598,3 +598,306 @@ training) and Tranco membership separates the classes by construction. Fetching 
 cuts contacts with phishing hosts and avoids repeating GETs that can have side effects (one-time
 links). Checking an address and then letting the HTTP library resolve again leaves a
 server-side request forgery gap (DNS rebinding); pinning the checked IP closes it.
+
+## 2026-11-05 — Split redone: URL groups by site owner, not platform (you agreed)
+
+**What happened.** The first real split (seed 42, sizes per D3) met the group and duplicate
+checks but not stratification: legitimate URLs 2.7% test, phishing URLs 26% (credential_harvest
+41.6%). Cause: URLs were grouped by registered domain, and 58.9% of phishing URLs sat on 15
+shared platforms (google.com 5,636; qrco.de 4,591; q-r.to 3,512; ead.me 3,293; web.app 1,932;
+...). A whole platform became one "attacker" group, and three of them fell into the test set.
+Nothing was trained or evaluated on that split; it is kept in `data/splits_rejected_2026-11-05/`.
+
+**Decided (applied to phishing URLs only; legitimate URLs keep their Tranco site's group,
+shared with its D10a link page):**
+1. Hosting platforms in the Public Suffix List's private section: the group is the customer
+   site (`evil.web.app`, not `web.app`).
+2. On a popular site (the owner is in the Tranco list: google.com, bit.ly, qrco.de, ...) the
+   attacker owns only the link: one group per link; but a link whose snapshot redirected to a
+   non-popular site is grouped with that landing site.
+3. URLs and emails are split separately (separate models, D5).
+4. Only URL records with a snapshot are sampled (54,100 of 117,586 legitimate URLs have one; all
+   phishing URLs do).
+
+**Result** (`data/splits/`, created 2026-11-05 04:54 UTC): 122,042 samples (103,184 URLs +
+18,858 emails), locked test 18,271 (URL 15.0%, email 14.8%; every category 14.2–15.3%, URL
+malware 16.7% of 18), 5 dev folds of 20,754–20,755, no group in two parts, no duplicate content.
+
+**Viva explanation.** Group splitting exists so near-copies from one attacker cannot be in both
+training and test. On shared platforms the platform is not the attacker, so domain grouping
+was both wrong (it merged unrelated attackers) and harmful (it made the test set 90% phishing).
+The PSL private section is the standard list of such platforms; Tranco membership marks
+domains no attacker owns; following redirects keeps links to the same phishing site together.
+URLs without a snapshot would have no page / DNS / TLS evidence only on the legitimate side,
+so "missing evidence" would leak the label. Redoing a split before any model has seen it is
+not test-set tuning: only class and category shares were inspected, never model results.
+
+## 2026-11-06 — D11c applied: F55 also leaves the deployed URL models
+
+Building the `live` and `live_stage1` feature sets showed that F55 `num_name_servers` uses the RDAP
+name servers when DNS has no NS answer (common for subdomains). Live scans have no RDAP (D11c), so
+F55 is left out of both sets; it stays in the RQ1 evaluation. M2 `live` has 84 features, M1
+`live_stage1` has 48. The feature itself is unchanged, so `feature_code_hash` and the models
+already trained stay valid.
+
+**Measured on 3,000 random development URLs:** removing RDAP changes F55 for 51.0% of phishing URLs
+(765 of 1,499) and 13.5% of legitimate URLs (203 of 1,501). Outside F46–F52, F55 is the only
+feature that changes. F55 therefore also carried RDAP information into `url/no_rdap`, so that set
+now drops F46–F52 and F55 (you decided; the run had not started). M1 and M2 train after the
+current queue (you decided).
+
+**Viva explanation:** a deployed model must get inputs computed the same way as in training. Tests
+check this by behaviour: changing RDAP or Tranco changes no `live` input, and removing the page and
+TLS changes no `live_stage1` input.
+
+## 2026-11-06 — Text models: inputs and training (you accepted the recommendations)
+
+**Decision:** LSTM and CNN read URL characters (up to 200) or email words (first 400, vocabulary
+30,000 from the training folds only). URLs are run twice: full URL and scheme plus host only.
+Email text is the subject and body after the time-clue normaliser, with no other headers. Same
+5 folds as the tabular models. Early stopping on a group-aware 10% of the training rows. 10 Optuna
+trials on fold 0. DistilBERT on Colab with fixed settings (2e-5, at most 3 epochs), no tuning.
+
+**Why:** the host-only run shows how much of the URL score only reflects that legitimate Tranco
+URLs are mostly home pages (D10c). Tuning on one fold keeps CPU time practical.
+
+**Alternative not chosen:** 50 trials over 5 folds as for the tabular models: far too slow on a CPU.
+
+**Viva explanation:** the text models get less tuning than the tabular models. This is a limitation
+of the comparison and must be stated with the results.
+
+## 2026-11-06 — Dataset names hidden from the email text models (recommendation, please review)
+
+**Finding:** on development emails, `enron` is in 37.5% of legitimate and 0% of phishing, `jose`
+19.5% of phishing and 0.6% of legitimate, `monkey` 16.4% and 0.1% (jose@monkey.org owns the Nazario
+corpus). The `<YEAR>` placeholder was in 56% and 18%.
+
+**Decision:** `services/text_input.py` replaces enron, ect, hou, jose and monkey with `<ORG>` and
+removes years, before any text model was trained. Training and live scans use the same function.
+
+**Threat that remains:** the style of forwarded mail also differs by corpus (`subject` 33% and 4%,
+`cc` 20% and 1%, `pm` 24% and 1%), and topics such as `energy` (13% and 0%) identify Enron. These
+were left in: removing ordinary words would make the text unrealistic. Report the FPR per
+legitimate source and on the recent own-mailbox emails, which share none of this.
+
+**Viva explanation:** a high score could mean the model recognises the source, not phishing. The
+word list comes from development rows only, so the locked test set played no part in choosing it.
+
+## 2026-11-06 — Simulations: safety built into the code (Phase 6, recommendation, please review)
+
+**Decision:** landing pages are always created with capture off; `details` of GoPhish events is
+never read; a campaign cannot launch without `PHISHGUARD_ETHICS_APPROVAL_REF`, active consent for
+every target, and a fictional organisation; events of people who withdrew are dropped. Samples are
+the template's own content, never anything about a participant. The dashboard shows totals only.
+
+**Verified on real GoPhish 0.12.1 (2026-11-06, local container, closed SMTP port, no email could
+leave):** GoPhish removed the `name` of every input, a submitted form did not reach GoPhish, and
+"Submitted Data" was still recorded.
+
+**Note for the ethics form:** GoPhish itself stores each participant's IP address and browser with
+each event, in its own database. PhishGuard does not copy them.
+
+**Viva explanation:** "never store credential values" is met at three points: the browser has
+nothing to send, GoPhish has nothing to store, and PhishGuard never reads that field.
+
+## 2026-11-07 — Simulations: the explanation appears on click, with no form (you decided)
+
+**Decision:** the landing page is `services/simulation/debrief.py`: it explains the simulation as soon
+as the link is opened, and has no form. So real campaigns will record clicks but no submissions, and
+any submission rate on the dashboard stays 0. RQ3 is not affected: a click alone is already a failed
+event. Since 2026-11-08 `campaigns.launch` creates this page itself for every campaign, from the
+template's fictional organisation and `PHISHGUARD_SIMULATION_CONTACT_EMAIL`, so no other page can be
+used; it refuses without a contact address.
+
+**Viva explanation:** I gave up measuring how many people would type a password in order to reduce
+harm: nobody is led to a form, and they learn straight away that it was a simulation.
+
+## 2026-11-07 — Simulation data retention (you decided; the committee has not answered)
+
+**Decision:** the ethics request proposes keeping study data with no planned deletion date, except when
+a participant withdraws, and asks the committee whether this is allowed. The committee's answer replaces
+this decision. Some participants may be my own students or staff, and the request says so.
+
+## 2026-11-08 — RQ2: ti_score formula, D7 subset and experiment (you agreed; built)
+
+Built 2026-11-08: `services/intel/scoring.py` (formula), `ml/phishguard_ml/training/rq2.py` with the
+`ti-record` and `rq2` commands; tests offline (`test_intel.py`, `test_rq2.py`). Not run yet: it needs
+the API keys, and the experiment needs the `url/live` models. Checked 2026-11-08 on the VirusTotal docs: the public API allows "500
+requests per day and a rate of 4 requests per minute", "must not be used in commercial products or
+services", and multiple accounts to get around the limits are not allowed
+(docs.virustotal.com/reference/public-vs-premium-api). The URL object has `last_analysis_stats`
+(harmless, malicious, suspicious, timeout, undetected) and `last_analysis_results`, one entry per engine
+with `category` (harmless, undetected, suspicious, malicious), `engine_name`, `method`, `result`
+(docs.virustotal.com/docs/url-object). **Not verified:** the VirusTotal terms of service and the OTX
+terms could not be read automatically, so whether either restricts using results as model input is
+unknown (URLhaus does restrict it). OTX `pulse_info.count` is used by third-party integrations but is not
+in official docs we could read; check it on one real response.
+
+**1. Subset (D7).**
+- Phishing: fresh URLs from the collector's batch of today or yesterday, so each is looked up within
+  about a day of collection (D7: at collection time only). They are outside the frozen split. The
+  median hours from collection to lookup is reported.
+- Legitimate: development legitimate URLs in a fixed random order (a hash of the sample id), never the
+  locked test set, never more each day than phishing URLs. A legitimate site's reputation changes
+  slowly, so the later lookup date matters less.
+- Size: 250 phishing + 250 legitimate a day (VirusTotal's 500 a day; about 2 h at 4 a minute) for 8
+  days, so 2,000 + 2,000. The same URLs go to OTX.
+
+**2. `ti_score` formula, fixed before any response is seen.**
+- `vt = 100 × min(1, (malicious + 0.5 × suspicious) / 5)`, counted from `last_analysis_results` with
+  feed engines removed (any engine named PhishTank or OpenPhish, if present: check on one real
+  response, since those feeds are where the phishing URLs came from).
+- `otx = 100 × min(1, pulse_count / 5)`.
+- `ti_score = max(vt, otx)`. "Not found" by a provider counts as 0 for that provider; an error leaves
+  that provider out; if both are left out, `ti_score` is missing (NaN, as for any feature).
+
+Why: `max` because either source alone is evidence, and an average would halve the score whenever one
+provider has not seen a new URL yet. Five engines or pulses for a full score is a round number, not
+tuned. Tree models are unaffected by any monotonic rescaling of one input, so the exact scale matters
+much less than the combination. The current `scoring.py` weights (10/3/4, caps 60/40) were never agreed
+and would be replaced.
+
+Alternative not chosen: giving the models the raw counts as separate inputs. CLAUDE.md fixes
+`ti_score` as one 0–100 input. The raw counts are kept in the recordings, so this could be a
+sensitivity check.
+
+**3. Experiment.** On the subset only: the three tabular models and the soft vote on the `live` feature
+set (the deployed URL inputs: no RDAP, no Tranco), with and without `ti_score`. Both use the same rows,
+the same 5 group folds (D4 groups) and the hyper-parameters already tuned for `url/live`, so the only
+difference is `ti_score`. Report FPR at 0.5 and at the warn and block thresholds, F1, group-bootstrap
+95% CIs and McNemar. Also report `ti_score` alone as a rule, and how many phishing URLs VirusTotal had
+already flagged on the day.
+
+**4. Circularity (threat to validity).** The phishing URLs come from PhishTank and OpenPhish, which
+also feed threat-intelligence services. Mitigations: feed engines removed from the VirusTotal count;
+same-day lookups; the "flagged on the day" share and the `ti_score`-alone row are reported, so a reader
+can see how much the score only repeats the source list.
+
+**Viva explanation:** RQ2 asks what live threat intelligence does to false positives, so the comparison
+holds everything else fixed: same rows, folds and hyper-parameters. Looking up phishing URLs on the day
+they appear mimics deployment, where a new URL is checked once, before most services know it.
+
+## 2026-11-08 — D6: visual similarity by favicon perceptual hash (you chose the perceptual hash)
+
+**Decision:** the extension compares a 64-bit difference hash (dHash, 9 x 8 cells of the 32 x 32
+icon) of the page's favicon with the favicons of the 35 brands in `lexicons.BRAND_DOMAINS`. Within 8
+of 64 bits, on a host that is not one of the matching brands' domains, the tab gets the warning badge
+and a title naming the brand. It never blocks, never changes the API verdict, and is outside the 140
+features. Reference hashes come from `python -m phishguard_ml brand-icons`, which fetches
+`https://<brand domain>/favicon.ico` from the brands' own sites only: 29 of 35 brands on 2026-11-08
+(binance, dropbox, facebook, fedex, linkedin and mastercard gave no readable /favicon.ico). Only the
+hashes are stored.
+
+**Why the favicon, not a screenshot:** a screenshot of the user's page would need more permission
+and could hold personal data; a favicon is small, public and copied by phishing kits. The favicon is
+read from a data: URL or the browser's favicon cache (Chrome and Edge `_favicon`, "favicon"
+permission, developer.chrome.com/docs/extensions/how-to/ui/favicons); a favicon address on the web is
+never fetched, so the check makes no contact with a possible phishing host. Firefox only gets the
+check when it gives the favicon as a data: URL.
+
+**Why 8 bits:** the closest two different companies' references are 9 bits apart (DocuSign, Visa),
+so a limit of 8 means one brand's icon cannot match another's (a test checks this on the real file).
+Brands of one company share an icon (Google and Gmail; Microsoft, Office 365, Outlook), so a match is
+owned by every brand that matched. **Not evaluated:** no stored phishing snapshot has a favicon, so
+there is no detection rate for D6; the thesis reports it as a built warning signal with that limit.
+Browser and Pillow scale icons slightly differently, which the 8-bit margin is meant to absorb (not
+yet measured in a real browser).
+
+**Viva explanation:** the check targets brand impersonation the URL and text models can miss: a page
+that looks like PayPal on a new domain. A perceptual hash survives small changes in scaling and
+colour that would break an exact hash, and comparing only against a brand's own domains avoids
+warning on the real site.
+
+## 2026-11-06 — Extension: first visit and API downtime (Phase 7)
+
+**Decision:** a URL rated block is replaced by the warning page after it starts loading; a session
+`declarativeNetRequest` rule then stops repeat visits before they load. Verdicts are cached for an
+hour. If the API is down or has no model, the extension does nothing (fail-open) and the gateway
+retries the same email later without acting (fail-safe: nothing is lost).
+
+**Why:** a rule cannot wait for an API answer, and holding every navigation until the API answers
+(up to 6.5 s) would make browsing unusable.
+
+**Alternative not chosen:** fail-closed, which would block all browsing whenever the API is down.
+
+**Viva explanation:** on a first visit the page may appear for a moment, and a user could interact
+with it during that time. This is a real limit of an API-based check in MV3, stated in the thesis.
+
+## 2026-11-06 — LSTM trained on Colab, not on this PC (Phase 3)
+
+**Decision (you agreed):** `ml/train_text_queue.ps1` trains the CNN only; `ml/colab/train_lstm.py` trains the LSTM on a Colab GPU with the same search.
+
+**Why:** measured on this CPU, with other training running, the LSTM needs 342–1,183 hours per run
+and more threads did not help. The CNN needs 6–14 hours. The queue would have stopped at the LSTM for
+weeks with the CNN still waiting.
+
+
+**Viva explanation:** the numbers are rough upper estimates from small samples on a busy CPU, but a
+free CPU several times faster would still be far too slow. The script is a copy of the repository
+design, and a test proves it gives the same predictions on a CPU, so the device is the only difference.
+
+## 2026-11-08 — GoPhish admin certificate: ours, and always checked (Phase 6)
+
+**Decision:** `make gophish-cert` makes a certificate naming `gophish`, `localhost` and
+`127.0.0.1`; GoPhish uses it (mounted over the one it would generate), and the API trusts exactly
+that file (`PHISHGUARD_GOPHISH_CA_FILE`). The API container gets the certificate folder only, not
+the key. Certificate checks are never switched off.
+
+**Why:** GoPhish 0.12.1 generates a self-signed certificate with no host name, so a checked
+connection fails ("IP address mismatch"), and the only way to use it would be to stop checking.
+Found on 2026-11-08 when running the campaign endpoints against real GoPhish.
+
+**Alternative not chosen:** `verify=False` (anyone on the path could read the GoPhish API key and
+participant addresses), or turning TLS off on the admin port.
+
+**Viva explanation:** the API sends participant addresses and the GoPhish API key over this
+connection, so it must know it is talking to our GoPhish; trusting one known certificate is the
+simplest way to do that on a single machine.
+
+## 2026-11-08 — CORS for the dashboard only (Phase 8)
+
+**Decision:** the API allows cross-origin requests from `PHISHGUARD_DASHBOARD_ORIGINS` only
+(default: the Vite dev server), methods GET and POST, headers `X-API-Key` and `Content-Type`, no
+credentials.
+
+**Why:** the dashboard runs on another origin and sends `X-API-Key`, so the browser asks first;
+without CORS every dashboard request failed. The unit tests did not show it because they fake
+`fetch`. The extension is not affected (its host permission lets it call the API).
+
+**Viva explanation (CORS):** CORS does not protect the API (the key does); it only decides which web pages
+a browser lets read the answers. Listing exact origins, rather than `*`, means a script on any other
+site cannot read answers from the local API through the user's browser.
+
+## 2026-11-09 — Extension: checking before the page is shown, options C + D (Phase 7)
+
+**Decision (you chose C + D, Docs/extension_precheck_proposal.md):** two rule-based checks before a
+page loads, keeping everything else as before.
+- **C, blocklist:** every 5 minutes the extension fetches `GET /extension/blocked-hosts` and installs
+  one rule that sends those hosts to the warning page before they load. The API lists a host when it
+  rated a URL on it block in the last 7 days, unless anything on the same registered domain was
+  rated allow in the last 30 days (at most 1,000 hosts, newest first).
+- **D, first visits:** a GET page load to a host this browser has not visited goes first to the
+  extension's checking page, which waits at most 2 s (provisional, to be set from measured stage-1
+  latency) for the API. Block goes to the warning page; any other answer opens the page and
+  remembers the host; no answer opens it and lets the host through for this browser session.
+- Rule order: open once (4) > block (3) > visited or unchecked hosts (2) > the check (1).
+
+**Changed from the proposal, and why:**
+- **Hosts, not domains or URLs:** a whole registered domain would block every site on shared
+  hosting; a URL often carries the victim's address or a token in its path or query, and would be
+  sent to every extension. The "allow on the same domain" exception guards shared hosts.
+- **Visited hosts are stored in plain text, not hashed:** the browser's rule engine can match only
+  plain host names. They stay in `chrome.storage.local` and are never sent anywhere (like history).
+- **Only GET page loads are checked:** redirecting a form submission would lose its data.
+
+**Checked:** unit tests (`precheck.test.ts`, `test_extension_api.py`), and in headless Edge with the
+built extension (2026-11-09): a host on the blocklist went to the warning page before loading; a first
+visit to example.com went through the checking page to the site; the second visit went straight
+through. URL models were not trained yet, so the API gave no verdict and the "unchecked" path was the
+one exercised; the "allow, remember the host" path is unit-tested only.
+
+**Viva explanation:** Chrome extensions cannot hold a page while asking a server, so the extension
+decides with rules prepared in advance: known phishing hosts are stopped outright, and only the first
+visit to an unknown host waits, which is where new phishing sites are. Sites already visited are not
+slowed down, the page still opens when the API is down (fail-open, as before), and the user can still
+open a blocked page once.
