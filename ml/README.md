@@ -136,6 +136,20 @@ python -m phishguard_ml rq2                 # after 8 days and url/live: -> data
 `--daily` checks every 30 minutes and stops at the day's quota, so a restart never exceeds
 VirusTotal's 500 lookups a day.
 
+## After the training queue
+
+When `data\train_logs\summary.log` says `QUEUE FINISHED`, run from the repo root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ml\after_training.ps1
+```
+
+It checks that `url/live` and `url/live_stage1` are registered, prints the stage-1 band table (you
+choose the band and set it in `.env`), rebuilds and starts the API and the evidence collector, scans
+one URL and one email, measures live latency (`python -m phishguard_ml live-latency`: median and p95
+per stage on 200 development legitimate URLs, and a suggested time limit for the extension's checking
+page), and runs `results`. Its output is saved in `data\after_training_<time>.log`.
+
 ## Notifications for long jobs
 
 `ml\notify_status.ps1` shows a Windows notification when a training run ends (or fails), a training

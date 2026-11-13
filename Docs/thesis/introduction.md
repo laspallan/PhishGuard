@@ -79,18 +79,39 @@ Two refinements were made during the work, for reasons given in the chapters cit
 
 ## 1.5 Contributions
 
-1. An evaluation of an ensemble phishing detector on a group-split dataset with a once-only locked
-   test set, with results reported separately for URLs and emails and with time clues in old email
-   corpora removed.
-2. A direct test of what live threat intelligence adds to a trained detector, with the circularity
+The central contribution is the **loop**, not any one of its parts. Detection, phishing simulation and
+retraining are each well studied on their own; they are rarely joined, and the detector is rarely the
+thing that consumes the simulation's output. The remaining contributions are the methods that let the
+loop be measured honestly.
+
+1. **An integrated, self-improving phishing-defence loop, built as a working system.** PhishGuard
+   closes the circuit between three parts that are usually studied apart. The deployed detector scans
+   URLs and emails; phishing simulations against consenting staff produce labelled examples of
+   phishing that worked on real people; and those examples are fed back as training data for the
+   detector's next retraining round. The loop is implemented end to end — an API, a browser extension,
+   an email gateway, a dashboard, and the simulation and retraining harness — rather than described in
+   the abstract, and a single feature extractor serves both training and the live system, so the
+   detector that is evaluated is the detector that runs. A failed simulation yields a sample built only
+   from the lure's own text, never from a participant's behaviour or identity. (Whether the loop
+   improves detection over time is RQ3, evaluated over [result: number of] monthly rounds in
+   Chapter 7; the contribution here is the controlled, deployed loop itself.)
+2. An evaluation of the detector on a group-split dataset with a once-only locked test set, with
+   results reported separately for URLs and emails and with time clues in old email corpora removed —
+   so that the accuracy claimed for the loop's detector is not inflated by near-duplicate leakage.
+3. A direct test of what live threat intelligence adds to a trained detector, with the circularity
    between feeds and TI services measured, not assumed away.
-3. A size-matched comparison that separates the effect of simulation data from the effect of simply
-   retraining on fresh data.
-4. An open-source implementation, including the data collection, safety controls for handling live
+4. A controlled, size-matched experiment that isolates the loop's own effect: a static model (A), a
+   model retrained on fresh feed data (B), and the same model with some fresh samples replaced, size
+   for size, by samples from failed simulations (C). This separates the effect of the simulation data
+   from the effect of simply retraining on more recent data, a comparison not found in the reviewed
+   literature. Simulation samples are, by construction, barred from the locked test set, so the loop
+   cannot inflate the headline (RQ1) result.
+5. An open-source implementation, including the data collection, the safety controls for handling live
    phishing pages and for running simulations ethically, and the scripts that rebuild every reported
    number. Raw datasets are not redistributed; the scripts rebuild them.
 
-[Trim to what the results support once they exist.]
+[Trim to what the results support once they exist. The RQ3 result (contribution 4) is pending the
+monthly rounds; until then, claim the loop as built and controlled, not as proven to help.]
 
 ## 1.6 Scope
 

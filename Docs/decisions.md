@@ -901,3 +901,154 @@ decides with rules prepared in advance: known phishing hosts are stopped outrigh
 visit to an unknown host waits, which is where new phishing sites are. Sites already visited are not
 slowed down, the page still opens when the API is down (fail-open, as before), and the user can still
 open a blocked page once.
+
+## 2026-11-09 — Withdrawal deletes the participant's data, in two steps (Phase 6)
+
+**Decision:** a withdrawn participant can be deleted (`POST /admin/simulation/participants/{id}/delete`,
+and "Delete" on the dashboard): their record, events and samples are deleted in PhishGuard, and their
+address is removed from every group PhishGuard made in GoPhish (`pg-…`; a group left empty is deleted,
+because GoPhish refuses an empty group). GoPhish also keeps a copy of each target in the results of
+campaigns already sent; those are erased per campaign, once it is completed and its events fetched
+(`.../campaigns/{id}/erase-gophish`, "Erase GoPhish results"). The delete answer says how many
+campaigns still hold such copies. Deleting needs withdrawal first; erasing needs a completed campaign.
+
+**Why:** the information sheet promises "your records are then deleted", and the request had said
+GoPhish entries would be removed by hand. It now matches what the software does. This is the
+exception to keeping study data with no deletion date (2026-11-07 entry).
+
+**Checked:** on real GoPhish 0.12.1 (local container, no campaign, no email): updating a group
+removes one address, an empty group is refused (400), deleting a group works, and deleting a
+campaign that does not exist answers 404. Tests with GoPhish faked: groups of other tools are never
+touched, the address is matched without case, and nothing about the person is in any answer.
+
+**Viva explanation:** deletion is two steps because GoPhish copies each recipient into a campaign's
+results when it is sent; removing one person from those results is not possible through its API, so
+the whole campaign's results are erased once PhishGuard has saved its own (address-free) events.
+
+## 2026-11-09 — Simulated emails use a fictional organisation, never the participants' employer
+
+**Decision:** the simulated phishing emails are sent as a fictional, invented organisation
+(Kestrelmoor Institute, Parcelwren, Lumacloud). They do not imitate Nansana Municipal Council — the
+participants' real employer — or any other real body, even though every participant is Council staff.
+The ethics request (Attachment C) and the code's real-brand refusal both enforce this.
+
+**Why:** impersonating the participants' own employer would raise the deception well beyond what the
+study needs, could be read as the employer endorsing or running the test, and conflicts with the
+project's standing safeguard that landing pages and senders never imitate a real brand. The research
+question is about whether retraining on failed-simulation data improves detection; it does not need a
+real-employer lure to be answered.
+
+**Alternative:** branding the emails as internal Nansana Municipal Council mail (as first suggested
+when filling in the ethics request). Not chosen for the reasons above; if a real-employer lure is ever
+judged necessary, it is a decision for the ethics committee and supervisor to make explicitly, not a
+default.
+
+**Viva explanation:** using invented organisations keeps the manipulation to the minimum the design
+requires (an unexpected but low-harm email), separates "did the model learn to detect the lure" from
+"did people trust their employer", and keeps one consistent safeguard across the code, the templates
+and the ethics submission.
+
+## 2026-11-09 — Data-protection basis stated for the ethics request
+
+**Decision:** the study cites Uganda's Data Protection and Privacy Act, 2019 and the Data Protection
+and Privacy Regulations, 2021 (Personal Data Protection Office under NITA-U) as the governing law, and
+the EU GDPR (Regulation (EU) 2016/679) as an international reference for its principles.
+
+**Why:** the participants and the researcher are in Uganda, so the Ugandan Act governs; GDPR is named
+because it is the widely recognised international benchmark a committee will expect a data-handling
+study to follow.
+
+**Alternative:** naming only GDPR (common in student templates). Not chosen because the applicable law
+is Ugandan; GDPR alone would misstate the legal basis. Exact regulation numbers are to be confirmed
+against the Gazette before submission.
+
+## 2026-11-11 — CNN text model can be trained on a Colab GPU
+
+**Decision:** added `ml/colab/train_cnn.py`, a standalone 1D-CNN trainer for a Colab/Kaggle GPU,
+alongside the existing `train_lstm.py` and `train_distilbert.py`. `text_colab.MODEL_FILES` now accepts
+`cnn_1d`, so a GPU CNN run imports through `text-import` like any other text model. Three new tests in
+`test_text_models.py` check that on a CPU the standalone CNN gives the same predictions and searches
+the same space as `training/text_train.py`, and that a run imports and reports as a normal text model.
+
+**Why:** the CNN was the last text model still tied to the PC's CPU (via `train_text_queue.ps1`,
+~6 h email + ~14 h URL). Moving it to the GPU frees the PC and shortens the text-model critical path.
+The parity tests guarantee the GPU result is the same model the thesis describes, so cross-model
+comparison (LSTM / CNN / DistilBERT) stays valid; only the device differs.
+
+**Alternative:** keep training the CNN on CPU locally. Not chosen because it needlessly occupies the
+machine the tabular queue already saturates, with no methodological benefit. The local CPU path
+remains available and is skipped automatically once a GPU-trained CNN is registered (whichever is
+imported first for a given modality/input is the registered one; the CNN must not be trained in both
+places for the same input).
+
+## 2026-11-11 — Stage-1 live-URL band set to 0.0108 / 0.9892 (fetch ~20%)
+
+**Decision:** after the tabular queue finished (all 9 feature sets, `url/live_stage1` exit 0 at
+07:55, `QUEUE FINISHED` 08:22), ran `phishguard_ml choose-band` and set
+`PHISHGUARD_STAGE1_BAND_LOW=0.010810810810810811`,
+`PHISHGUARD_STAGE1_BAND_HIGH=0.9891891891891892` in `.env`. These are the LightGBM `target_share=0.20`
+boundaries. LightGBM is the served stage-1 model M1 (lowest OOF log loss among the three on
+`url/live_stage1`: lightgbm 0.0633, xgboost 0.0660, random_forest 0.0773; `band.py` serves the
+lowest-log-loss model, so the band is read off its table).
+
+**Why:** the band is the "uncertain" middle on M1's calibrated score; scores outside it are decided at
+stage 1 (no page fetch), scores inside it are sent to stage 2 (live fetch). The goal is to decide as
+many URLs as possible at stage 1 while keeping the errors M1 makes alone negligible. At `0.20`, ~80%
+of URLs decide at stage 1 and only ~20% are fetched, while M1's stage-1 miss rate falls to 0.29% and
+its stage-1 FPR to 0.04% — both an order of magnitude below the URL model's own development error
+(~3% each), so the cascade's own decisions add almost nothing to the error budget. This is the knee of
+the trade-off: versus the provisional 0.15–0.85 band (≈ the 0.05 row), it cuts stage-1 miss 4.4×
+(1.28%→0.29%) and FPR 9× (0.38%→0.04%) for 15 percentage points more fetching.
+
+**Alternatives:** (a) the provisional 0.15–0.85 band fetches only ~5% but leaves a 1.28% stage-1 miss
+rate — too many fresh phishing URLs decided "allow" without their page. (b) `target_share=0.30`
+(0.005–0.995) barely improves the miss rate (0.29%→0.14%) and slightly *raises* FPR (0.04%→0.05%) while
+fetching 50% more pages — a poor trade. (c) `0.50` reaches a 0.04% miss but fetches every other URL,
+defeating the point of a cheap stage 1. 0.20 is the smallest fetch share at which the stage-1 errors
+are already negligible.
+
+**Viva note:** the band is chosen on development out-of-fold predictions only (cross-fitted
+calibration), never on the locked test set; `choose-band` reads `url/live_stage1/<model>/oof.parquet`.
+The band governs only *when to fetch a page*, not the final allow/warn/block thresholds, which are
+unchanged.
+
+## 2026-11-11 — Ethics approval confirmed; simulation gate opened (reference 110427)
+
+**Decision:** set `PHISHGUARD_ETHICS_APPROVAL_REF=110427` in `.env`, satisfying the software's
+"no approval, no launch" gate (`services/simulation/campaigns.py`). Supporting documents received
+and signed:
+- **IBSTU Research Ethics Committee approval**, reference **110427**, signed by the Committee Chair
+  **Male Henry Kenneth** and (separately) by the supervisor **Christopher Ayesiga**.
+- **Nansana Municipal Council authorisation**, Ref **CRM10427**, Office of the Town Clerk (signed
+  "NAKINTU GRACE, FOR Town Clerk", stamped), designating **Kitonsa Habibu, ICT Department** as the
+  Council's contact; conditions mirror the ethics request's safeguards.
+
+**Why the earlier reservation is withdrawn:** on 2026-11-11 an earlier approval document carried the
+student number (011250360) as its reference and appeared to be chaired by the supervisor, which would
+not have been independent. The documents received now resolve both points — the committee chair
+(Male Henry Kenneth) is a different person from the supervisor, and the reference (110427) is a
+distinct institutional number — and the host organisation has independently authorised the study.
+
+**What this does and does not do:** setting the reference flips `simulations_allowed` to true and
+removes the approval blocker only. It launches nothing. Each campaign still independently requires a
+draft campaign, a participant list with recorded, non-withdrawn consent, a template that names a
+fictional organisation (real-brand names are refused), and a contact address for the explanation
+page. The running API must be restarted to read the new value.
+
+**Open cleanup (not blocking):** the signed Attachments A, B and D state the withdrawal deadline as
+"11 January 2026" — a past date, clearly a typo for **11 January 2027** (section 6 of the approval
+says 2027). The repository's `Docs/ethics_request.md` still says "11 December 2026". These should be
+reconciled to one authoritative date (11 January 2027) before the first round.
+
+## 2026-11-11 — Invented template-organisation names re-checked before Round 1
+
+**Decision:** re-ran the web search on the three invented organisation names used in the simulation
+templates, as the ethics request commits to doing before the first round. Result: no real
+organisation uses any of the three exact names.
+- **Kestrelmoor Institute** — not found (closest, unrelated: "Kestrel Institute", a different body).
+- **Parcelwren** — not found (closest, unrelated: ParcelWorks, Parcelly, Parcel2Go).
+- **Lumacloud** — not found (closest, unrelated: FileCloud, Egnyte).
+
+**Why:** the templates must name only fictional organisations; the request promised a fresh search
+immediately before Round 1 and a change if any name turned out to be real. All three remain clear, so
+no template needs renaming. If a round is delayed, repeat this check before sending.

@@ -1,5 +1,5 @@
 import { useApi } from "@/shared/api/client";
-import { DataState, DataTable } from "@/shared/components/DataState";
+import { DataState, DataTable, HeroStat, Stat } from "@/shared/components/DataState";
 import { PageHeader } from "@/shared/components/PageHeader";
 
 interface ModelList {
@@ -32,41 +32,73 @@ export function ModelsPage() {
       />
       <div className="space-y-8">
         <DataState state={models} isEmpty={(data) => data.models.length === 0} emptyMessage="No models registered yet.">
-          {(data) => (
-            <DataTable
-              caption="Registered versions"
-              headers={["Version", "Type", "Modality", "Out-of-fold log loss"]}
-              rows={data.models.map((model) => [
-                model.version ?? "–",
-                model.name,
-                model.modality,
-                number(model.metrics?.oof_log_loss),
-              ])}
-            />
-          )}
+          {(data) => {
+            const urls = data.models.filter((model) => model.modality === "url").length;
+            const emails = data.models.filter((model) => model.modality === "email").length;
+            let best: { version: string | null; name: string; loss: number } | null = null;
+            for (const model of data.models) {
+              const loss = model.metrics?.oof_log_loss;
+              if (typeof loss === "number" && (best === null || loss < best.loss)) {
+                best = { version: model.version, name: model.name, loss };
+              }
+            }
+            const types = [...new Set(data.models.map((model) => model.name))];
+            return (
+              <div className="space-y-6">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <HeroStat
+                    label="Registered models"
+                    value={String(data.models.length)}
+                    hint={`${urls} URL · ${emails} email`}
+                  />
+                  <Stat
+                    label="Best out-of-fold log loss"
+                    value={best ? best.loss.toFixed(4) : "–"}
+                    hint={best?.version ?? "no metrics yet"}
+                  />
+                  <Stat label="Model types" value={String(types.length)} hint={types.join(", ")} />
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <DataTable
+                    caption="Registered versions"
+                    headers={["Version", "Type", "Modality", "Out-of-fold log loss"]}
+                    rows={data.models.map((model) => [
+                      model.version ?? "–",
+                      model.name,
+                      model.modality,
+                      number(model.metrics?.oof_log_loss),
+                    ])}
+                  />
+                </div>
+              </div>
+            );
+          }}
         </DataState>
         <DataState
           state={results}
           isEmpty={(data) => Object.keys(data).length === 0}
           emptyMessage="No development report yet. Run: python -m phishguard_ml report"
         >
-          {(data) =>
-            Object.entries(data).map(([key, rows]) => (
-              <DataTable
-                key={key}
-                caption={key}
-                headers={["Model", "n", "Precision", "Recall", "F1 [95% CI]", "FPR [95% CI]"]}
-                rows={rows.map((row) => [
-                  row.model,
-                  row.n,
-                  number(row.precision),
-                  number(row.recall),
-                  `${number(row.f1)} [${number(row.ci95.f1[0])}, ${number(row.ci95.f1[1])}]`,
-                  `${number(row.fpr)} [${number(row.ci95.fpr[0])}, ${number(row.ci95.fpr[1])}]`,
-                ])}
-              />
-            ))
-          }
+          {(data) => (
+            <div className="space-y-6">
+              {Object.entries(data).map(([key, rows]) => (
+                <div key={key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <DataTable
+                    caption={key}
+                    headers={["Model", "n", "Precision", "Recall", "F1 [95% CI]", "FPR [95% CI]"]}
+                    rows={rows.map((row) => [
+                      row.model,
+                      row.n,
+                      number(row.precision),
+                      number(row.recall),
+                      `${number(row.f1)} [${number(row.ci95.f1[0])}, ${number(row.ci95.f1[1])}]`,
+                      `${number(row.fpr)} [${number(row.ci95.fpr[0])}, ${number(row.ci95.fpr[1])}]`,
+                    ])}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </DataState>
       </div>
     </>

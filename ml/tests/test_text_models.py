@@ -433,3 +433,71 @@ def test_colab_lstm_refuses_an_old_export_and_import_refuses_a_missing_model(
     (out / "vocabulary.json").unlink()
     with pytest.raises(ValueError, match="final model is missing"):
         text_colab.import_run(out, data, manifest["sha256"])
+
+
+def _cnn_script():
+    pytest.importorskip("optuna")
+    path = Path(__file__).parents[1] / "colab" / "train_cnn.py"
+    spec = importlib.util.spec_from_file_location("train_cnn", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_colab_cnn_gives_the_same_predictions_as_the_repository_code():
+    script = _cnn_script()
+    data = _dev()
+    fitted = text_train.fit("cnn_1d", CNN, data.texts, data.y, data.groups, CHARS, max_epochs=2)
+    settings = {"kind": "char", "max_length": 30, "max_vocabulary": 50}
+    model, vocabulary, epochs = script.fit(
+        CNN, data.texts, data.y, data.groups, settings, device="cpu", max_epochs=2
+    )
+    assert epochs == fitted.epochs and vocabulary.tokens == fitted.vocabulary.tokens
+    np.testing.assert_array_equal(
+        script.predict(model, vocabulary, data.texts, "cpu"), fitted.predict(data.texts)
+    )
+
+
+def test_colab_cnn_searches_the_same_space_as_the_repository_code():
+    import optuna
+
+    trial = optuna.create_study().ask()
+    text_train.search_space("cnn_1d", trial)
+    assert trial.distributions == _cnn_script().SEARCH_SPACE
+
+
+def test_colab_cnn_resumes_and_is_imported_as_a_normal_text_model(isolated_data_dir, tmp_path):
+    records = _records()
+    split.write_split(records, split.make_split(records), {})
+    manifest = split.verify_split()
+    data = devdata.load_development_text(Modality.URL, "text_host")
+    path = text_colab.export(data, "url", "text_host", manifest["sha256"])
+
+    script = _cnn_script()
+    out = tmp_path / "drive"
+    messages = []
+    options = dict(n_trials=2, max_epochs=1, device="cpu", log=messages.append)
+    script.run(path, out, **options)
+    trials = json.loads((out / "trials.json").read_text())["trials"]
+    assert len(trials) == 2
+
+    # A disconnect costs at most one training: one trial and all folds are kept, one fold is redone.
+    (out / "run.json").unlink()
+    (out / "fold_0.json").unlink()
+    (out / "trials.json").write_text(json.dumps({"n": len(data.y), "trials": trials[:1]}))
+    messages.clear()
+    script.run(path, out, **options)
+    assert sum(m.startswith("trial ") for m in messages) == 1
+    assert sum("already done" in m for m in messages) == 4
+    kept = json.loads((out / "trials.json").read_text())["trials"]
+    assert kept[0] == trials[0] and kept[1]["params"] != trials[0]["params"]
+
+    entry = text_colab.import_run(out, data, manifest["sha256"])
+    assert entry["model"] == "cnn_1d" and entry["feature_set"] == "text_host"
+    folder = registry.load_registry()[-1]["path"]
+    fitted = text_train.load_final(isolated_data_dir / "models" / folder, "url")
+    assert fitted.predict(data.texts[:3]).shape == (3,)
+    assert text_train.run_is_complete(
+        "url", "text_host", "cnn_1d", n_trials=2, split_sha256=manifest["sha256"]
+    )
+    assert "url/text_host" in report.build(n_boot=5)

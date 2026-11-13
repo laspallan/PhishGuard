@@ -30,6 +30,15 @@ class FakeGoPhish:
 
     def __call__(self, request):
         self.requests.append(request)
+        if request.url.path == "/api/groups/" and request.method == "GET":
+            targets = [{"email": "private@test.example"}, {"email": "other@test.example"}]
+            return httpx.Response(200, json=[
+                {"id": 3, "name": "pg-x", "targets": targets},
+                {"id": 4, "name": "pg-y", "targets": [{"email": "PRIVATE@test.example"}]},
+                {"id": 5, "name": "someone-elses", "targets": [{"email": "private@test.example"}]},
+            ])  # fmt: skip
+        if request.method in ("PUT", "DELETE"):
+            return httpx.Response(200, json={"success": True})
         if request.url.path.endswith("/results"):
             timeline = [
                 {"email": "private@test.example", "time": "2026-11-08T11:00:00Z",
@@ -172,6 +181,47 @@ def test_the_lists_give_ids_and_never_an_email_address(approved):
     for response in (templates, people, found):
         assert "private@" not in response.text and "email" not in response.json()[0]
     assert approved.get("/admin/simulation/participants").status_code == 401
+
+
+def test_a_withdrawn_participant_is_deleted_here_and_from_phishguards_gophish_groups(
+    approved, fake, sqlite_engine
+):
+    campaign, person = _draft(approved)
+    _launch(approved, campaign, [person])
+    url = f"/admin/simulation/participants/{person}/delete"
+    assert approved.post(url, headers=KEY).status_code == 409  # not withdrawn yet
+    approved.post(f"/admin/simulation/participants/{person}/withdraw", headers=KEY)
+    answer = approved.post(url, headers=KEY)
+    assert answer.status_code == 200
+    assert answer.json() == {
+        "deleted": True, "gophish_groups_changed": 2, "gophish_campaigns_still_holding_results": 1
+    }  # fmt: skip
+    put = next(r for r in fake.requests if r.method == "PUT")
+    assert put.url.path == "/api/groups/3"
+    assert json.loads(put.content)["targets"] == [{"email": "other@test.example"}]
+    deleted = [r.url.path for r in fake.requests if r.method == "DELETE"]
+    assert deleted == ["/api/groups/4"]  # emptied; "someone-elses" was never touched
+    assert approved.get("/admin/simulation/participants", headers=KEY).json() == []
+    assert "private@" not in answer.text
+
+
+def test_gophish_results_are_erased_only_for_a_completed_campaign(approved, fake):
+    campaign, person = _draft(approved)
+    _launch(approved, campaign, [person])
+    url = f"/admin/simulation/campaigns/{campaign}/erase-gophish"
+    assert approved.post(url, headers=KEY).status_code == 409  # still running
+    approved.post(f"/admin/simulation/campaigns/{campaign}/complete", headers=KEY)
+    assert approved.post(url, headers=KEY).json()["status"] == "gophish_results_erased"
+    assert [r.url.path for r in fake.requests if r.method == "DELETE"] == ["/api/campaigns/7"]
+    assert approved.post(url, headers=KEY).status_code == 409  # nothing left to erase
+
+
+def test_deleting_before_any_launch_needs_no_gophish(not_approved, fake, monkeypatch):
+    _, person = _draft(not_approved)
+    monkeypatch.setattr(simulation_controller, "_client", lambda _s: pytest.fail("no GoPhish"))
+    not_approved.post(f"/admin/simulation/participants/{person}/withdraw", headers=KEY)
+    answer = not_approved.post(f"/admin/simulation/participants/{person}/delete", headers=KEY)
+    assert answer.json()["deleted"] is True and answer.json()["gophish_groups_changed"] == 0
 
 
 def test_the_gophish_certificate_is_always_checked(tmp_path, monkeypatch):

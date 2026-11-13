@@ -126,6 +126,55 @@ def store_events(session: Session, campaign: Campaign, events: list[TimelineEven
     return counts
 
 
+def erase_participant(
+    session: Session, client: GoPhishClient | None, participant: Participant
+) -> dict:
+    """Deletes a withdrawn participant: their address leaves every PhishGuard group in GoPhish, and
+    their record, events and samples are deleted here (the foreign keys cascade).
+
+    GoPhish also keeps a copy of each target in the results of campaigns already launched; those go
+    only when the whole campaign is erased from GoPhish (`erase_gophish_results`), so the answer
+    says how many campaigns still hold results.
+    """
+    if participant.consent_withdrawn_at is None:
+        raise SimulationNotAllowedError("withdraw the participant before deleting them")
+    address = participant.email.strip().lower()
+    groups_changed = 0
+    if client is not None:
+        for group in client.groups():
+            if not str(group.get("name", "")).startswith("pg-"):
+                continue  # only groups PhishGuard made
+            targets = group.get("targets") or []
+            kept = [t for t in targets if str(t.get("email", "")).strip().lower() != address]
+            if len(kept) == len(targets):
+                continue
+            if kept:
+                client.update_group({**group, "targets": kept})
+            else:
+                client.delete_group(group["id"])  # GoPhish refuses a group without targets
+            groups_changed += 1
+    session.delete(participant)
+    session.commit()
+    holding = session.scalars(
+        select(Campaign.id).where(Campaign.gophish_campaign_id.is_not(None))
+    ).all()
+    return {"deleted": True, "gophish_groups_changed": groups_changed,
+            "gophish_campaigns_still_holding_results": len(holding)}  # fmt: skip
+
+
+def erase_gophish_results(session: Session, client: GoPhishClient, campaign: Campaign) -> Campaign:
+    """Deletes a completed campaign's results from GoPhish (addresses, IP addresses, browsers).
+    PhishGuard keeps its own events, so fetch them first; afterwards nothing more can be fetched."""
+    if campaign.status is not CampaignStatus.COMPLETED:
+        raise SimulationNotAllowedError("only a completed campaign's GoPhish results can be erased")
+    if campaign.gophish_campaign_id is None:
+        raise SimulationNotAllowedError("this campaign has no results in GoPhish")
+    client.delete_campaign(campaign.gophish_campaign_id)
+    campaign.gophish_campaign_id = None
+    session.commit()
+    return campaign
+
+
 def sample_usage(template: Template) -> SampleUsage:
     """Holdout templates become the simulation-holdout set, never training data. There is no
     value for the locked test set: it is a frozen file outside the database."""

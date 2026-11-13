@@ -199,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("final-report", help="every final number, from the saved predictions")
     p = sub.add_parser("report")
     p.add_argument("--n-boot", type=int, default=1000)
+    p = sub.add_parser("live-latency", help="median and p95 of the running API's URL scans")
+    p.add_argument("--n", type=int, default=200)
+    p.add_argument("--api", default="http://127.0.0.1:8000")
     p = sub.add_parser("results", help="recompute every reported table from the saved files")
     p.add_argument("--n-boot", type=int, default=1000)
     sub.add_parser("baseline-export")
@@ -307,6 +310,15 @@ def _run(args) -> int:
 
         results.build(n_boot=args.n_boot)
         print("written", results.results_path())
+    elif args.command == "live-latency":
+        from phishguard.core.config import get_settings
+        from phishguard_ml.evaluation import live_latency
+
+        key = get_settings().api_key
+        if key is None:
+            print("Refusing: set PHISHGUARD_API_KEY in .env first", file=sys.stderr)
+            return 2
+        _print(live_latency.run(args.n, args.api, key.get_secret_value()))
     elif args.command == "results":
         from phishguard_ml.evaluation import rebuild
 

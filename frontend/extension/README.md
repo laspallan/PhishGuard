@@ -41,10 +41,15 @@ open the toolbar popup and enter the API address (default `http://127.0.0.1:8000
 Checking before the page is shown (`src/precheck.ts`, decisions.md 2026-11-09):
 - hosts PhishGuard blocked recently (`GET /extension/blocked-hosts`, refreshed every 5 minutes) go to
   the warning page before they load;
-- a first visit to a host this browser has not visited waits on `checking.html` for at most 2 s;
-  any answer but block opens it, and no answer opens it unchecked for this session;
+- a first visit to a host this browser has not visited waits on `checking.html` for at most 3.8 s
+  (`GATE_TIMEOUT_MS`, set 2026-11-11 from measured live latency, p95 3.7 s); any answer but block
+  opens it, and no answer opens it unchecked for this session;
 - visited hosts are kept in `chrome.storage.local` only, never sent anywhere; form posts are never
   redirected.
 
-Loaded and tried in headless Edge on 2026-11-09 (blocklist, first and second visit). Still open: a
-Firefox run, the D6 check in a real browser, and the "allow" path with trained URL models.
+Loaded and tried in headless Edge on 2026-11-09 (blocklist, first and second visit). Rebuilt
+2026-11-12 (picks up `GATE_TIMEOUT_MS=3800`); 28 unit tests pass. The "allow" path with trained URL
+models was confirmed 2026-11-12 at the API boundary the service worker calls: `POST /scan/url` for
+`http://example.com/` returned a real verdict (`url-live-lightgbm`, two-stage cascade, SHAP
+explanations), and `GET /extension/blocked-hosts` answers 401 without the key and 200 with it. Still
+open (need a person at a browser): a Firefox run and the D6 favicon check in a real browser.

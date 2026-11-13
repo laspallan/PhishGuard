@@ -25,6 +25,7 @@ from phishguard_ml.training.text_settings import TOKENS, code_hash
 MODEL_FILES = {
     "distilbert": ("model/model.safetensors",),
     "lstm": ("model.pt", "vocabulary.json"),
+    "cnn_1d": ("model.pt", "vocabulary.json"),
 }
 
 # DistilBERT tokens, not characters or words: its pieces of words use more than the LSTM's tokens.

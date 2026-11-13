@@ -15,8 +15,9 @@ export const UNCHECKED_RULE_ID = 900; // session rule: hosts that could not be c
 export const FIRST_SESSION_RULE_ID = 1000; // per-URL session rules start here
 
 export const PRIORITY = { gate: 1, allow: 2, block: 3, allowOnce: 4 } as const;
-/** Provisional: how long a first visit waits; to be set from measured stage-1 latency. */
-export const GATE_TIMEOUT_MS = 2000;
+/** How long a first visit waits. Set 2026-11-11 from measured live latency
+ *  (live-latency --n 200: all-answered p95 3.7 s; suggested_gate_timeout_ms 3800). */
+export const GATE_TIMEOUT_MS = 3800;
 export const MAX_VISITED = 5000;
 export const BLOCKLIST_REFRESH_MINUTES = 5;
 

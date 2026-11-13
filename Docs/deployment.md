@@ -152,6 +152,14 @@ participants can be targeted. Landing pages are always PhishGuard's explanation 
    consent), a draft campaign, then Launch, Fetch events, Complete. The **Campaigns** page shows
    totals only.
 
+> **⚠️ GoPhish state is not persisted.** Only the cert and key files are mounted; `gophish.db`
+> (the admin password, the API key, and every sending profile / template / campaign created inside
+> GoPhish) lives in the container's writable layer. Do **not** run `docker compose down`, or remove
+> or recreate the `gophish` container, while a round is live — it resets the first-boot password and
+> API key, and steps 2–4 above (and `PHISHGUARD_GOPHISH_API_KEY` in `.env`) must be redone. To make
+> this safe long-term, add a named volume for `/opt/gophish/gophish.db` at a planned moment (it
+> starts empty, so the key is regenerated once after the switch). See `Docs/simulation_runbook.md`.
+
 Checked on 2026-11-08 against real GoPhish 0.12.1 in a local container with a closed SMTP port and
 a `.test` address (no email could leave): launch, the explanation page (no form, capture off),
 fetching events and completing all worked through the real API code, with the certificate checked.
@@ -169,9 +177,11 @@ fetching events and completing all worked through the real API code, with the ce
 ## 13. Stopping and backups
 
 ```powershell
-docker compose --profile live --profile collect --profile simulate down
+docker compose --profile live --profile collect --profile simulate --profile baseline down
 ```
 
-`down` keeps the database volume; `down -v` deletes it with every stored scan and participant, so
-do not use `-v` during the study. Back up `.env` (above all the encryption key) and `data/` outside
-the repository.
+`down` keeps the Postgres database volume (`pgdata`); `down -v` deletes it with every stored scan
+and participant, so do not use `-v` during the study. **It does not preserve GoPhish's `gophish.db`**
+(see the warning in section 11): bringing the `gophish` container down and up again during a round
+resets its admin password, API key, profiles and templates. Back up `.env` (above all the encryption
+key) and `data/` outside the repository.

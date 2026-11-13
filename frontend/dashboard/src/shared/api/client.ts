@@ -27,6 +27,11 @@ export function loadApiKey(): string | null {
   return sessionStorage.getItem(KEY_NAME);
 }
 
+// Used by "Sign out": drop the key so the next page view returns to the sign-in page.
+export function clearApiKey(): void {
+  sessionStorage.removeItem(KEY_NAME);
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   const key = loadApiKey();

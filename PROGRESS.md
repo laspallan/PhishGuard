@@ -86,7 +86,11 @@ samples with a page.
 
 ## Phase 3 — Models, ensembles, baseline and development evaluation
 
-**Status:** In progress (code first, on synthetic data; real training needs the split).
+**Status:** Development complete (2026-11-12). All tabular models (9 feature sets × RF/XGBoost/
+LightGBM), all 9 text models (LSTM/DistilBERT/CNN × 3 feature sets), ensembles, the cascade and the
+SpamAssassin baseline are trained on the real development split and folded into the development
+tables (`data/models/results.md`). The only remaining model number is the one-shot locked-test
+evaluation, which belongs to Phase 8 (`final-eval`, your decision — the test set stays sealed).
 **Decided 2026-11-03:** single-level Optuna on 5-fold CV, cross-fitted calibration/stacking,
 DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+(b).
 
@@ -121,8 +125,21 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   0.0761 (fold 0 was used to choose the settings; the other four average about 0.080). URL text_host
   trained on Colab 2026-11-07, about 32 min. URL text_full stopped at 3 of 10 trials (Colab limit);
   resuming draws the remaining trials with a different seed.
-- [ ] 5. Cascade: the rule, the report row and `evaluation/latency.py` are built and tested; the
-  real row and the CPU latency need DistilBERT from Colab (your action)
+  **2026-11-11:** LSTM `url/text_full` finished on a Colab GPU and was imported (OOF log loss 0.0805);
+  DistilBERT `email/text_body` trained on Colab and imported (OOF log loss 0.0528). Added
+  `ml/colab/train_cnn.py` so the CNN can train on a GPU too (parity-tested; `MODEL_FILES` now accepts
+  `cnn_1d`); decisions.md. Registered text models: LSTM ×3, DistilBERT ×1.
+  **2026-11-12: all remaining GPU text runs finished and auto-imported** (Colab Pro, L4, parallel
+  notebooks; Drive-synced and registered on this PC by the import watcher). DistilBERT `url/text_host`
+  OOF log loss 0.1471, `url/text_full` 0.0710; CNN `email/text_body`, `url/text_host`, `url/text_full`
+  imported. **All 9 text models now registered** (LSTM ×3, DistilBERT ×3, CNN ×3 — every
+  modality/feature-set × model built). GPU text-model work for Phase 3 is complete; `results`
+  re-run to fold them into the development tables.
+- [x] 5. Cascade: the rule, the report row and `evaluation/latency.py` are built and tested.
+  **Done 2026-11-12 now DistilBERT is trained:** the real cascade rows are in `results.md`
+  (email no_header + DistilBERT cascade F1 0.9698; url/live cascade F1 0.9864), and CPU/live
+  latency was measured 2026-11-11 (`live-latency --n 200`: median 710 ms, p95 3.7 s; stage 1
+  527 ms, stage 2 1.8 s). Only the one-shot locked-test cascade row (Phase 8 `final-eval`) is left.
 - [x] 6. Signature baseline (D2): `evaluation/baseline.py` + `ml/spamassassin/` container
   (SpamAssassin 4.0.1, Bayes off, no network), rows in the results table; URL baseline only in
   RQ3 (you decided). 3 tests + end-to-end; smoke test on 300 real emails passed.
@@ -135,7 +152,7 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   `evaluation/report.py` (CV table per modality / feature set, ensembles, CIs, ECE, FPR at
   0.60 / 0.90, FPR per legitimate source, McNemar vs soft vote); `train` and `report`
   commands — end-to-end test on synthetic data
-- [ ] 8. Real runs (started 2026-11-05; you chose 50 trials for every run). Queue:
+- [x] 8. Real runs (started 2026-11-05; you chose 50 trials for every run). Queue:
   `ml/train_queue.ps1`, safe to re-run: `train --resume` skips models already complete with the
   same feature code, split, trial count and seed (a crash costs at most the model in progress).
   Order: email/no_header, url/all, email/all, url/no_path, url/no_tranco, url/no_rdap, then
@@ -143,6 +160,15 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   pass; 3 models each (random forest, XGBoost, LightGBM). url/all and email/all are done too.
   **email/no_header done** in 2 h 49 min, OOF log loss:
   RF 0.1586, XGBoost 0.1316, LightGBM 0.1305. First url/all attempt lost to battery shutdowns.
+  **QUEUE FINISHED 2026-11-11 08:22** — all 9 feature sets trained, every run exit 0. The two heavy
+  final runs: `url/live_stage1` (01:42→07:55, 6 h 13 m) and `email/no_age` (→08:22). Stage-1 M1 OOF
+  log loss: lightgbm 0.0633 (served), xgboost 0.0660, RF 0.0773. The self-healing scheduled task
+  keeps re-running the queue every 30 min as instant `--resume` no-ops; disable "PhishGuard training"
+  before running `after_training.ps1` to avoid a registry race.
+- [x] 8b. Stage-1 band chosen 2026-11-11 (delegated): LightGBM `target_share=0.20` →
+  `PHISHGUARD_STAGE1_BAND_LOW=0.010810810810810811` / `HIGH=0.9891891891891892` written to `.env`
+  (fetch ~20%; stage-1 miss 0.29%, FPR 0.04%). See Docs/decisions.md 2026-11-11 for the full
+  rationale. `after_training.ps1` step 2 will now flow through without stopping for a band.
 
 ## Phase 4 — Threat-intelligence service and RQ2
 
@@ -152,11 +178,16 @@ DistilBERT on Colab (development split only), D2, D5, Enron header handling (a)+
   offline recorder of raw responses with timestamps — tests offline (mocked HTTP)
 - [x] `ti_score` formula and D7 subset agreed 2026-11-08 (`Docs/decisions.md`, RQ2) and built:
   `scoring.py`, `training/rq2.py`, commands `ti-record [--daily]` and `rq2`; tests offline
-  (`test_intel.py` 13, `test_rq2.py` 6). Still to check on the first real answers: OTX
-  `pulse_info.count`, and the VirusTotal engine names for PhishTank and OpenPhish.
-- [ ] Record TI responses for the subset (8 days of `ti-record --daily`, needs the keys and the PC
-  awake); then `rq2` (needs the `url/live` models)
-- [ ] Your action: free VirusTotal and OTX keys in `.env`
+  (`test_intel.py` 13, `test_rq2.py` 6). **Checked on real answers 2026-11-11:** the VirusTotal
+  engine names appear as `Phishtank` and `OpenPhish` (854 of 1,500 answers each) and OTX
+  `pulse_info.count` is present in 1,440 of 1,500 — the scoring reads real answers correctly.
+- [x] Your action: free VirusTotal and OTX keys in `.env` (set; the daily recorder uses them)
+- [~] Record TI responses for the subset: **5 days recorded (Nov 8–12; 1,250 phishing + 1,250
+  legitimate unique samples)**; the daily job continues. **`rq2` re-run 2026-11-12** on `url/live`
+  (re-run free as more days land): soft vote F1 0.9685 without `ti_score` vs 0.9753 with it,
+  **McNemar p = 0.030 — now significant** (at 3 days it was p = 0.108, not significant); `ti_score`
+  alone recall 0.5680 (p < 0.0001, significantly worse). 58.9% of fresh phishing was flagged by
+  VirusTotal on the day (median 4.2 h after collection). `data/models/rq2/results.md`.
 
 ## Phase 5 — Backend API and database
 
@@ -207,10 +238,19 @@ in the answer and in `scans.top_features`; `test_scan_persistence.py` on real Po
 admin endpoints for the dashboard (`test_admin_api.py`); `choose-band` command.
 
 **Still open in Phase 5 (D11):**
-- Real URL scans: M1 and M2 are not trained yet, so URL scans answer 503. After they are: run
-  `choose-band` and set the band (0.15–0.85 is provisional), rebuild the evidence-collector image
-  (task signature changed), measure p95 latency.
-- End-to-end test with the extension and the gateway (D11 step 6).
+- ~~Real URL scans: M1 and M2 are not trained yet, so URL scans answer 503.~~ **Done 2026-11-11:**
+  `ml\after_training.ps1` ran end to end (exit 0) with the trained M1/M2 and the chosen band
+  (0.0108/0.9892). API + evidence-collector rebuilt (pre-cached) and healthy, models loaded. End-to-end
+  scans: email plain message → allow 0.039; `example.com` → allow 0.002 stage 1 once the collector was
+  warm (a cold first scan warns under the D11e "never allow the unverified" rule, not a bug). Live
+  latency (`live-latency --n 200`): median 710 ms, p95 3.7 s; stage 1 (70%) 527 ms, stage 2 (30%)
+  1.8 s; suggested gate timeout 3800 ms, now set in `frontend/extension/src/precheck.ts`. `results`
+  rebuilt the dev + RQ2 tables (final-eval correctly skipped). Thesis Tables 7.1/7.2 filled from
+  `results.md`.
+- ~~End-to-end test with the extension and the gateway (D11 step 6) — needs an extension rebuild
+  to pick up GATE_TIMEOUT_MS=3800.~~ **Done 2026-11-12:** extension rebuilt (3800 baked into the
+  precheck chunk, 28 tests pass); live `POST /scan/url` and `GET /extension/blocked-hosts` verified
+  against the trained-model API (see Phase 7).
 - `ti_score` is None (Phase 4).
 - ~~Redis is still published on 127.0.0.1:6379~~ Closed 2026-11-08: not published in
   `docker-compose.yml`; `docker-compose.dev.yml` publishes it on 127.0.0.1 only for host runs.
@@ -281,10 +321,22 @@ found that GoPhish's own certificate cannot be checked, so `make gophish-cert` a
 `PHISHGUARD_GOPHISH_CA_FILE` were added (decisions.md); rerun through the real client, certificate
 checked. Tests: `test_simulation_api.py` 8 passed; dashboard 23 passed, build clean.
 
-**Not done:** the pre-condition (ethics approval, your action); your approval of the 8 draft
-templates in `Docs/simulation_templates.md` (4 categories × train/holdout, fictional names checked
-against the real-brand list and a web search; not loaded anywhere); loading real monthly data and real simulation samples into `rq3.run_round` (needs
-months of collected data and real samples).
+**Added 2026-11-09:** deleting a withdrawn participant (record, events, samples, and their address
+in PhishGuard's GoPhish groups) and erasing a completed campaign's results from GoPhish; endpoints
+and dashboard buttons; GoPhish group/campaign endpoints checked on real GoPhish 0.12.1; simulation
+tests 33 passed (decisions.md). The ethics request now describes this.
+
+**Pre-condition met 2026-11-11:** ethics approval (reference 110427, independent committee chair) and
+Nansana Municipal Council authorisation (Ref CRM10427) received; `PHISHGUARD_ETHICS_APPROVAL_REF`
+set, API reports `simulations_allowed=true`. GoPhish started (`--profile simulate`). Operational
+runbook written: `Docs/simulation_runbook.md`.
+
+**Still to do (operational / your action):** copy the GoPhish API key into `.env` and restart the
+API; create a GoPhish sending profile (SMTP); approve the 8 templates in
+`Docs/simulation_templates.md` and load them; recruit volunteers through the Council's ICT department
+and record each signed consent; then launch Round 1. The RQ3 round command/pipeline
+(`rq3.run_round`, feeding real simulation samples into retraining) needs months of collected data and
+is run by you/your supervisor, not Claude — see the runbook's "Division of labour".
 
 ## Phase 7 — Browser extension and email gateway
 
@@ -309,7 +361,14 @@ months of collected data and real samples).
   permission; extension 28 passed, build clean. **First real-browser run** (headless Edge, built
   extension, API on the host): blocklisted host stopped before loading; first visit through the
   checking page; second visit straight through. Temporary test rows deleted afterwards.
-- [ ] End-to-end test against a running API with a trained model (after Phase 5)
+- [x] End-to-end test against a running API with a trained model — **done 2026-11-12.** Extension
+  rebuilt (`npm run build`, picks up `GATE_TIMEOUT_MS=3800`; 28 unit tests pass). Against the live
+  API with the trained models loaded: `GET /extension/blocked-hosts` → 401 without the key, 200 with
+  it (`{"hosts":[],"block_days":7}`); `POST /scan/url` for `http://example.com/` (the call
+  `background.ts` makes) → real verdict `warn` 0.628 from `url-live-lightgbm-47141703e142`, stage-2
+  cascade, evidence complete, SHAP explanations, latency 4.37 s. This closes the "allow path with
+  trained URL models" that the 2026-11-09 headless-Edge run (blocklist + gate) could not reach.
+  Residual (needs a person at a browser, not blocking): a Firefox run and the D6 favicon check live.
 
 ## Phase 8 — Dashboard, deployment, final evaluation and RQ3 rounds
 

@@ -135,6 +135,22 @@ describe("simulation page", () => {
     expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ fictional_org: "PayPal", split: "train" });
   });
 
+  it("offers Delete only for a withdrawn participant, and asks first", async () => {
+    const withdrawn = { ...(answers["/admin/simulation/participants"] as object[])[0], withdrawn: true };
+    const saved = answers["/admin/simulation/participants"];
+    answers["/admin/simulation/participants"] = [withdrawn];
+    const mock = routed(() => new Response(JSON.stringify({ deleted: true, gophish_groups_changed: 1, gophish_campaigns_still_holding_results: 0 }), { status: 200 }));
+    vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
+    const user = userEvent.setup();
+    render(<SimulationPage />);
+    expect(screen.queryByRole("button", { name: "Withdraw" })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    const post = mock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(String(post?.[0])).toContain("/admin/simulation/participants/p1/delete");
+    expect(await screen.findByRole("status")).toHaveTextContent("P1 deleted.");
+    answers["/admin/simulation/participants"] = saved;
+  });
+
   it("asks before withdrawing and posts nothing if cancelled", async () => {
     const mock = routed(() => new Response(JSON.stringify({ id: "p1", status: "withdrawn" }), { status: 200 }));
     vi.stubGlobal("confirm", vi.fn().mockReturnValue(false));

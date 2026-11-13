@@ -96,6 +96,20 @@ class GoPhishClient:
         targets = [{"email": e, "first_name": "", "last_name": "", "position": ""} for e in emails]
         return self._request("POST", "groups/", json={"name": name, "targets": targets})
 
+    def groups(self) -> list[dict]:
+        return self._request("GET", "groups/")
+
+    def update_group(self, group: dict) -> dict:
+        """Replaces the group's targets; GoPhish needs at least one."""
+        return self._request("PUT", f"groups/{group['id']}", json=group)
+
+    def delete_group(self, group_id: int) -> dict:
+        return self._request("DELETE", f"groups/{group_id}")
+
+    def delete_campaign(self, campaign_id: int) -> dict:
+        """Deletes the campaign and its results (addresses, IPs, browsers) from GoPhish."""
+        return self._request("DELETE", f"campaigns/{campaign_id}")
+
     def create_sending_profile(self, name: str, *, host: str, from_address: str) -> dict:
         """`from_address` must be a bare address: real GoPhish 0.12.1 answered 500 to
         "Name <a@b.com>" and to addresses under .invalid (checked 2026-11-06)."""

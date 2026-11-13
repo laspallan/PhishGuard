@@ -1,0 +1,12 @@
+{
+ "verified": true,
+ "issuer": "CN=WE1,O=Google Trust Services,C=US",
+ "subject": "CN=nodejs.org",
+ "not_before": "2026-10-10T14:28:14+00:00",
+ "not_after": "2027-01-08T15:28:11+00:00",
+ "san": [
+  "nodejs.org",
+  "doc-kit.nodejs.org",
+  "*.doc-kit.nodejs.org"
+ ]
+}

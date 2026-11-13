@@ -141,6 +141,39 @@ class SimulationController:
             session.commit()
         return {"id": participant.id, "status": "withdrawn"}
 
+    def erase_participant(
+        self, session: Session, settings: Settings, participant_id: uuid.UUID
+    ) -> dict:
+        """Deletes a withdrawn participant here and from PhishGuard's GoPhish groups."""
+        participant = _get(session, Participant, participant_id)
+        if participant.consent_withdrawn_at is None:
+            raise HTTPException(409, "withdraw the participant before deleting them")
+        launched = session.scalar(select(Campaign.id).where(Campaign.launched_at.is_not(None)))
+        client = _client(settings) if launched is not None else None  # no launch, no GoPhish data
+        try:
+            return campaigns.erase_participant(session, client, participant)
+        except GoPhishError as error:
+            session.rollback()
+            raise HTTPException(502, str(error)) from None
+        finally:
+            if client is not None:
+                client.close()
+
+    def erase_gophish_results(
+        self, session: Session, settings: Settings, campaign_id: uuid.UUID
+    ) -> dict:
+        campaign = _get(session, Campaign, campaign_id)
+        client = _client(settings)
+        try:
+            campaigns.erase_gophish_results(session, client, campaign)
+        except SimulationNotAllowedError as error:
+            raise HTTPException(409, str(error)) from None
+        except GoPhishError as error:
+            raise HTTPException(502, str(error)) from None
+        finally:
+            client.close()
+        return {"id": campaign.id, "status": "gophish_results_erased"}
+
     def create_campaign(self, session: Session, body: CampaignIn) -> dict:
         _get(session, Template, body.template_id)
         campaign = Campaign(name=body.name, template_id=body.template_id)

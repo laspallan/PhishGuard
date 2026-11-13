@@ -69,6 +69,14 @@ class CampaignRow(BaseModel):
     completed_at: datetime | None
 
 
+class Erased(BaseModel):
+    deleted: bool
+    gophish_groups_changed: int
+    # Launched campaigns whose GoPhish results still hold copies of targets (erase them after the
+    # last fetch, with .../campaigns/{id}/erase-gophish).
+    gophish_campaigns_still_holding_results: int
+
+
 class SyncResult(BaseModel):
     saved: int
     already_saved: int

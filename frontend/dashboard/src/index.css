@@ -1,9 +1,22 @@
 @import "tailwindcss";
 
-/* Chart colours, checked for colour-blind separation and contrast on the light page surface.
-   The dashboard has no dark mode, so there is only this one set. */
+/* Chart and UI colours, checked for colour-blind separation and contrast on the light page
+   surface (values from the data-viz reference palette). The dashboard has no dark mode, so there
+   is only this one set. */
 :root {
+  /* Categorical series (neutral identity, not state) */
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
+
+  /* Status (fixed, never themed): always shown with a label, never colour alone */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+
+  /* Surfaces and ink */
+  --surface: #ffffff;
+  --page: #f8fafc;
+  --border: #e2e8f0;
 }

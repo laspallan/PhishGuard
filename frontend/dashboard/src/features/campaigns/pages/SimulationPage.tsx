@@ -212,6 +212,16 @@ function Participants({ rows, onDone }: { rows: Participant[]; onDone: () => voi
     void run(`${BASE}/participants/${person.id}/withdraw`, undefined, () => `${person.participant_code} withdrawn.`);
   }
 
+  function erase(person: Participant) {
+    if (!window.confirm(`Delete ${person.participant_code} for good? Their record, events and samples are deleted, and their address is removed from GoPhish's groups. This cannot be undone.`)) return;
+    void run(`${BASE}/participants/${person.id}/delete`, undefined, (answer) => {
+      const left = (answer as { gophish_campaigns_still_holding_results: number }).gophish_campaigns_still_holding_results;
+      return left > 0
+        ? `${person.participant_code} deleted. ${left} launched campaign(s) still hold copies in GoPhish's results: erase them once completed.`
+        : `${person.participant_code} deleted.`;
+    });
+  }
+
   return (
     <>
       <div className="overflow-x-auto">
@@ -234,7 +244,11 @@ function Participants({ rows, onDone }: { rows: Participant[]; onDone: () => voi
                 <td className="px-2 py-1 tabular-nums">{day(p.consent_given_at)}</td>
                 <td className="px-2 py-1">{p.withdrawn ? "Withdrawn" : "Active"}</td>
                 <td className="px-2 py-1">
-                  {!p.withdrawn && (
+                  {p.withdrawn ? (
+                    <button type="button" disabled={busy} onClick={() => erase(p)} className={button}>
+                      Delete
+                    </button>
+                  ) : (
                     <button type="button" disabled={busy} onClick={() => withdraw(p)} className={button}>
                       Withdraw
                     </button>
@@ -348,6 +362,10 @@ function CampaignActions({ campaign, onDone }: { campaign: Campaign; onDone: () 
     if (!window.confirm(`Complete "${campaign.name}"? GoPhish stops tracking it.`)) return;
     void run(`${BASE}/campaigns/${campaign.id}/complete`, undefined, () => `${campaign.name} completed.`);
   };
+  const eraseGoPhish = () => {
+    if (!window.confirm(`Erase "${campaign.name}" from GoPhish? Its results there (addresses, IP addresses, browsers) are deleted. PhishGuard keeps the events it has already fetched; fetch them first.`)) return;
+    void run(`${BASE}/campaigns/${campaign.id}/erase-gophish`, undefined, () => `${campaign.name} erased from GoPhish.`);
+  };
 
   return (
     <div className="mt-2">
@@ -358,6 +376,11 @@ function CampaignActions({ campaign, onDone }: { campaign: Campaign; onDone: () 
         {campaign.status === "running" && (
           <button type="button" disabled={busy} onClick={complete} className={button}>
             Complete
+          </button>
+        )}
+        {campaign.status === "completed" && (
+          <button type="button" disabled={busy} onClick={eraseGoPhish} className={button}>
+            Erase GoPhish results
           </button>
         )}
       </div>

@@ -15,6 +15,7 @@ from phishguard.schemas.simulation import (
     CampaignIn,
     CampaignRow,
     Created,
+    Erased,
     LaunchIn,
     ParticipantIn,
     ParticipantRow,
@@ -59,6 +60,19 @@ def add_participant(body: ParticipantIn, session: Db):
 @router.post("/participants/{participant_id}/withdraw", response_model=Created)
 def withdraw(participant_id: uuid.UUID, session: Db):
     return controller.withdraw(session, participant_id)
+
+
+@router.post("/participants/{participant_id}/delete", response_model=Erased)
+def erase_participant(participant_id: uuid.UUID, session: Db, settings: Config):
+    """Withdrawn participants only: deletes their record, events and samples, and their address
+    from PhishGuard's GoPhish groups."""
+    return controller.erase_participant(session, settings, participant_id)
+
+
+@router.post("/campaigns/{campaign_id}/erase-gophish", response_model=Created)
+def erase_gophish_results(campaign_id: uuid.UUID, session: Db, settings: Config):
+    """Completed campaigns only: deletes the campaign's results (addresses, IPs) from GoPhish."""
+    return controller.erase_gophish_results(session, settings, campaign_id)
 
 
 @router.post("/campaigns", response_model=Created, status_code=201)
